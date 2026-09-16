@@ -1,0 +1,17 @@
+{
+  "apiVersion": 1,
+  "id": "desk",
+  "name": "imprint-desk-plugin",
+  "version": "0.1.0",
+  "capabilities": ["ui", "vault.read"],
+  "entry": {
+    "start": "node dist/cli.js serve",
+    "health": "GET http://127.0.0.1:${port}/health"
+  },
+  "configSchema": {
+    "port": { "type": "number", "default": 4173 },
+    "hostUrl": { "type": "string", "default": "http://127.0.0.1:9470" },
+    "vault": { "type": "string", "default": "${vault}" }
+  },
+  "tools": []
+}

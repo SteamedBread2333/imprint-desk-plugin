@@ -1,0 +1,35 @@
+{
+  "name": "imprint-desk-plugin",
+  "version": "0.1.0",
+  "description": "Live imprint vault dashboard UI plugin",
+  "type": "module",
+  "bin": {
+    "imprint-desk": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "imprint.plugin.json"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "dev:check": "node scripts/check-host.mjs",
+    "build": "tsc && vite build",
+    "serve": "node dist/cli.js serve",
+    "pretest": "npm run build",
+    "test": "node scripts/smoke.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>imprint desk</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <div class="brand">imprint <small id="stamp"></small></div>
+  <div class="toolbar">
+    <input id="q" type="search" placeholder="Search claim, id, or scope" aria-label="Search" data-i18n-placeholder="search_ph" data-i18n-aria="search_aria">
+    <select id="status" aria-label="Status" data-i18n-aria="status_aria">
+      <option value="" data-i18n="status_all">all status</option>
+      <option value="active" data-i18n="status_active">active</option>
+      <option value="dormant" data-i18n="status_dormant">dormant</option>
+      <option value="superseded" data-i18n="status_superseded">superseded</option>
+    </select>
+    <select id="conf" aria-label="Minimum confidence" data-i18n-aria="conf_aria">
+      <option value="0" data-i18n="conf_any">any confidence</option>
+      <option value="0.85">≥ 0.85</option>
+      <option value="0.6">≥ 0.60</option>
+      <option value="0.3">≥ 0.30</option>
+    </select>
+    <select id="scopeFilter" aria-label="Scope" data-i18n-aria="scope_aria"><option value="" data-i18n="scope_all">all scopes</option></select>
+    <div class="view-switch" id="viewSwitch" role="group" aria-label="Home view" data-i18n-aria="view_aria">
+      <button type="button" id="viewList" title="Census" aria-pressed="true" data-i18n="view_list" data-i18n-title="view_list_title">list</button>
+      <button type="button" id="viewMap" title="All nodes on the graph" aria-pressed="false" data-i18n="view_map" data-i18n-title="view_map_title">graph</button>
+    </div>
+    <button id="fitBtn" type="button" title="Fit graph (F)" data-i18n="fit" data-i18n-title="fit_title">fit</button>
+    <button id="labelBtn" type="button" title="Cycle label mode" data-i18n-title="labels_title">labels: off</button>
+    <button id="helpBtn" type="button" title="Help (?)" data-i18n-title="help_title_btn">?</button>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="header-status">
+    <button id="shelvesStatus" type="button" class="shelves-badge hidden" title="Shelves"></button>
+    <button id="langBtn" type="button" title="中文">中文</button>
+  </div>
+</header>
+<div id="recipe">
+  <span id="recipeText">Loading…</span>
+  <button id="clearBtn" type="button" data-i18n="clear">clear</button>
+  <span class="edge-toggle">
+    <label><input type="checkbox" id="eRelated" checked> <span data-i18n="related">related</span></label>
+    <label><input type="checkbox" id="eSuper" checked> <span data-i18n="super">supersede</span></label>
+    <label><input type="checkbox" id="eConflict" checked> <span data-i18n="conflict">conflict</span></label>
+  </span>
+</div>
+<main>
+  <aside class="scroll-panel">
+    <div class="aside-tabs" id="asideTabs">
+      <button type="button" id="tabScopes" class="on" data-i18n="tab_scopes">scopes</button>
+      <button type="button" id="tabDocs" class="hidden" data-i18n="tab_docs">docs</button>
+    </div>
+    <div id="scopesPanel">
+      <h2 data-i18n="scopes">Scopes</h2>
+      <p class="empty" id="scopesHint" data-i18n="scopes_hint">A tag keeps rules that include it. Filters stack.</p>
+      <div id="scopes"></div>
+    </div>
+    <div id="docsPanel" class="hidden">
+      <h2 data-i18n="docs_title">Documents</h2>
+      <p class="empty" data-i18n="docs_hint">Search workspace docs indexed by shelves (BM25).</p>
+      <input id="docQ" type="search" placeholder="Search documentation" data-i18n-placeholder="docs_ph" data-i18n-aria="docs_aria" aria-label="Search docs">
+      <div id="docHits" class="doc-hits"></div>
+      <article id="docPreview" class="doc-preview hidden"></article>
+    </div>
+  </aside>
+  <div id="stage">
+    <div id="overview" class="hidden scroll-panel"></div>
+    <div id="cy"></div>
+    <div id="hud" class="hidden">
+      <div id="legend">
+        <div class="legend-head"><b data-i18n="legend_title">Relation graph</b> · <span data-i18n="legend_sub">colour is scope</span></div>
+        <div id="legendScopes" class="palette" role="list"></div>
+        <div id="legendFocus"></div>
+        <div class="legend-edges">
+          <div class="edge-key"><span class="swatch line related" aria-hidden="true"></span><span data-i18n="related">related</span></div>
+          <div class="edge-key"><span class="swatch line super" aria-hidden="true"></span><span data-i18n="super">supersede</span></div>
+          <div class="edge-key"><span class="swatch line conflict" aria-hidden="true"></span><span data-i18n="conflict">conflict</span></div>
+        </div>
+        <div class="legend-note" id="legendNodes"></div>
+      </div>
+      <div class="row">
+        <button type="button" id="zoomOut">−</button>
+        <button type="button" id="zoomIn">+</button>
+      </div>
+    </div>
+  </div>
+  <section class="detail scroll-panel" id="detail">
+    <p class="empty" id="detailEmpty"></p>
+  </section>
+</main>
+<div id="tip" role="tooltip"></div>
+<div id="helpPanel" role="dialog" aria-labelledby="helpTitle" hidden>
+  <div class="help-card scroll-panel">
+    <h1 id="helpTitle"></h1>
+    <p class="empty" id="helpLead"></p>
+    <div class="help-grid" id="helpGrid"></div>
+    <p style="margin:18px 0 0;text-align:right"><button type="button" id="helpClose"></button></p>
+  </div>
+</div>
+<div id="loadBanner" class="load-banner hidden" role="alert"></div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script type="module" src="/main.js"></script>
+</body>
+</html>
