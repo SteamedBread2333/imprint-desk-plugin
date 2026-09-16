@@ -1,5 +1,14 @@
 import { getCachedGraph, putCachedGraph } from "./idb.js";
 
+let renderDocPreviewFn = null;
+async function loadDocPreview() {
+  if (!renderDocPreviewFn) {
+    const mod = await import("./docs-markdown.js");
+    renderDocPreviewFn = mod.renderDocPreview;
+  }
+  return renderDocPreviewFn;
+}
+
 let DATA;
 const SCOPE_PALETTE = ["#7dba82","#d4b483","#6ec4c0","#e0a04a","#c77d9a","#7aa0c8","#e07060","#a78bfa","#86c56a","#e8c99a","#5b9a8b","#f0c14a"];
 const statusBorder = { active: "#e8c99a", dormant: "#7a736c", superseded: "#7aa0c8" };
@@ -50,12 +59,20 @@ const I18N = {
     help_keys: "Keys",
     help_keys_d: "/ search · F fit · L labels · ? help · Esc<br>scroll zoom · drag pan · click to re-root",
     close: "close", lang_to: "中文", lang_title: "中文",
-    tab_scopes: "scopes", tab_docs: "docs",
+    mode_rules: "rules", mode_docs: "docs",
     docs_title: "Documents", docs_hint: "Workspace docs via built-in shelves (host API).",
     docs_ph: "Search documentation", docs_aria: "Search docs",
-    docs_search_off: "Shelves indexing disabled — cache is read-only",
+    docs_search_off: "Shelves indexing disabled — search unavailable",
     docs_empty: "No hits.", docs_offline: "Offline — showing cached graph:",
     docs_loading: "Searching…",
+    docs_browse_title: "Search workspace documentation",
+    docs_browse_lead: "Indexed markdown from shelves roots (typically docs/). Use the search bar above or pick a result on the left.",
+    docs_browse_keys: "focus search",
+    docs_indexed: "{files} files · {chunks} chunks indexed",
+    docs_disabled_title: "Document search unavailable",
+    docs_disabled_hint: "Set shelves.enabled: true in .imprint/imprint.yaml, then run imprint up.",
+    docs_rebuild_hint: "Docs changed after host started? Run imprint down && imprint up.",
+    docs_cached_hint: "{n} cached chunks available read-only while shelves is off.",
     shelves_on: "Shelves on", shelves_off: "Shelves off", shelves_cached: "Shelves off · {n} cached"
   },
   zh: {
@@ -102,12 +119,20 @@ const I18N = {
     help_keys: "快捷键",
     help_keys_d: "/ 搜索 · F 适配 · L 标签 · ? 帮助 · Esc<br>滚轮缩放 · 拖拽平移 · 点击换根",
     close: "关闭", lang_to: "EN", lang_title: "English",
-    tab_scopes: "范围", tab_docs: "文档",
+    mode_rules: "规则", mode_docs: "文档",
     docs_title: "文档", docs_hint: "内置 shelves 工作区文档（经 host API）。",
     docs_ph: "搜索文档", docs_aria: "搜索文档",
-    docs_search_off: "Shelves 已禁用 — 仅可读缓存",
+    docs_search_off: "Shelves 已禁用 — 无法搜索",
     docs_empty: "无结果。", docs_offline: "离线 — 显示缓存图谱：",
     docs_loading: "搜索中…",
+    docs_browse_title: "搜索工作区文档",
+    docs_browse_lead: "来自 shelves 根目录（通常是 docs/）的 markdown。用上方搜索框，或从左侧选一条结果。",
+    docs_browse_keys: "聚焦搜索",
+    docs_indexed: "已索引 {files} 个文件 · {chunks} 块",
+    docs_disabled_title: "文档搜索不可用",
+    docs_disabled_hint: "在 .imprint/imprint.yaml 设置 shelves.enabled: true，然后运行 imprint up。",
+    docs_rebuild_hint: "host 启动后 docs 有变动？运行 imprint down && imprint up。",
+    docs_cached_hint: "Shelves 关闭中，可读 {n} 块缓存。",
     shelves_on: "Shelves 开", shelves_off: "Shelves 关", shelves_cached: "Shelves 关 · 缓存 {n} 块"
   }
 };
@@ -142,6 +167,8 @@ let docSearchTimer = null;
 let selectedDocId = null;
 let hostVaultHint = "";
 let cacheVaultKey = "";
+let appMode = "rules";
+let shelvesInfo = null;
 
 function t(key, vars) {
   const table = I18N[lang] || I18N.en;
@@ -170,6 +197,7 @@ function queryString() {
   if (!document.getElementById("eSuper").checked) p.set("super", "0");
   if (!document.getElementById("eConflict").checked) p.set("conflict", "0");
   if (lang === "zh") p.set("lang", "zh");
+  if (appMode === "docs") p.set("mode", "docs");
   if (selectedId) p.set("id", selectedId);
   if (labelMode !== "auto") p.set("labels", labelMode);
   return p.toString();
@@ -206,6 +234,7 @@ function applyQuery(search) {
   document.getElementById("eSuper").checked = p.get("super") !== "0";
   document.getElementById("eConflict").checked = p.get("conflict") !== "0";
   lang = p.get("lang") === "zh" ? "zh" : "en";
+  appMode = p.get("mode") === "docs" ? "docs" : "rules";
   selectedId = p.get("id") || null;
   const lb = p.get("labels");
   labelMode = (lb === "on" || lb === "off" || lb === "auto") ? lb : "off";
@@ -235,6 +264,7 @@ function applyLang() {
   const empty = document.getElementById("detailEmpty");
   if (empty) empty.innerHTML = t("detail_empty");
   if (!scopeList.length) scopesEl.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
+  if (appMode === "docs") refreshDocsChrome();
 }
 function commit(mode) {
   render();
@@ -847,6 +877,7 @@ function startApp() {
   window.addEventListener("popstate", e => {
     applyQuery(e.state && e.state.qs != null ? e.state.qs : location.search.slice(1));
     applyLang();
+    if (docsPanelEnabled) setAppMode(appMode, false);
     render();
   });
   document.addEventListener("keydown", e => {
@@ -855,7 +886,11 @@ function startApp() {
       return;
     }
     if (e.key === "?" || (e.key === "/" && e.shiftKey)) { e.preventDefault(); setHelp(!document.getElementById("helpPanel").classList.contains("open")); }
-    else if (e.key === "/") { e.preventDefault(); document.getElementById("q").focus(); }
+    else if (e.key === "/") {
+      e.preventDefault();
+      if (appMode === "docs" && docsPanelEnabled) document.getElementById("docQ").focus();
+      else document.getElementById("q").focus();
+    }
     else if (e.key === "f" || e.key === "F") { fitGraph(); }
     else if (e.key === "l" || e.key === "L") { document.getElementById("labelBtn").click(); }
     else if (e.key === "Escape") {
@@ -939,24 +974,99 @@ async function refreshGraph(fromPoll) {
   }
 }
 
-function switchAsideTab(which) {
-  const scopes = document.getElementById("scopesPanel");
-  const docs = document.getElementById("docsPanel");
-  const tabScopes = document.getElementById("tabScopes");
-  const tabDocs = document.getElementById("tabDocs");
-  const onScopes = which !== "docs";
-  scopes.classList.toggle("hidden", !onScopes);
-  docs.classList.toggle("hidden", onScopes);
-  tabScopes.classList.toggle("on", onScopes);
-  tabDocs.classList.toggle("on", !onScopes);
+export function applyEarlyMode() {
+  const p = new URLSearchParams(location.search);
+  if (p.get("mode") !== "docs") return;
+  document.body.classList.add("docs-mode");
+  document.getElementById("recipe")?.classList.add("hidden");
+  document.getElementById("rulesMain")?.classList.add("hidden");
+  document.getElementById("rulesMain")?.setAttribute("aria-hidden", "true");
+  document.getElementById("docsMain")?.classList.remove("hidden");
+  document.getElementById("docsMain")?.setAttribute("aria-hidden", "false");
+  document.getElementById("rulesToolbar")?.classList.add("hidden");
+  document.getElementById("docsToolbar")?.classList.remove("hidden");
+  document.getElementById("modeRules")?.classList.remove("on");
+  document.getElementById("modeDocs")?.classList.remove("hidden");
+  document.getElementById("modeDocs")?.classList.add("on");
+  appMode = "docs";
+}
+
+function setAppMode(mode, syncUrl) {
+  if (mode !== "docs") mode = "rules";
+  if (mode === "docs" && !docsPanelEnabled) mode = "rules";
+  appMode = mode;
+  const rules = mode === "rules";
+  document.body.classList.toggle("docs-mode", !rules);
+  document.getElementById("recipe").classList.toggle("hidden", !rules);
+  document.getElementById("rulesMain").classList.toggle("hidden", !rules);
+  document.getElementById("rulesMain").setAttribute("aria-hidden", rules ? "false" : "true");
+  document.getElementById("docsMain").classList.toggle("hidden", rules);
+  document.getElementById("docsMain").setAttribute("aria-hidden", rules ? "true" : "false");
+  document.getElementById("rulesToolbar").classList.toggle("hidden", !rules);
+  document.getElementById("docsToolbar").classList.toggle("hidden", rules);
+  document.getElementById("modeRules").classList.toggle("on", rules);
+  document.getElementById("modeDocs").classList.toggle("on", !rules);
+  document.getElementById("modeRules").setAttribute("aria-selected", rules ? "true" : "false");
+  document.getElementById("modeDocs").setAttribute("aria-selected", rules ? "false" : "true");
+  if (!rules) {
+    refreshDocsChrome();
+    const docQ = document.getElementById("docQ");
+    if (docQ.value.trim()) runDocSearch(docQ.value);
+    else docQ.focus();
+  }
+  if (syncUrl !== false) pushQuery();
+}
+
+function refreshDocsChrome() {
+  const meta = document.getElementById("docsMeta");
+  const notice = document.getElementById("docsNotice");
+  const stats = document.getElementById("docsStats");
+  const s = shelvesInfo || {};
+  const chunks = Number(s.chunk_count ?? 0);
+  const files = Number(s.file_count ?? 0);
+  if (s.enabled && chunks > 0) {
+    meta.textContent = t("docs_indexed", { files, chunks });
+  } else {
+    meta.textContent = t("docs_hint");
+  }
+  if (stats) {
+    stats.textContent = s.enabled
+      ? (chunks > 0 ? t("docs_indexed", { files, chunks }) : t("docs_search_off"))
+      : (chunks > 0 ? t("shelves_cached", { n: chunks }) : t("shelves_off"));
+  }
+  if (!notice) return;
+  if (docsSearchEnabled) {
+    notice.classList.add("hidden");
+    notice.innerHTML = "";
+    return;
+  }
+  notice.classList.remove("hidden");
+  notice.className = "docs-notice off";
+  let body = t("docs_disabled_hint");
+  if (chunks > 0) body += " " + t("docs_cached_hint", { n: chunks });
+  notice.innerHTML = "<b>" + escapeHtml(t("docs_disabled_title")) + "</b>" + escapeHtml(body);
+}
+
+function showDocsEmptyState() {
+  const preview = document.getElementById("docPreview");
+  preview.innerHTML =
+    '<div class="docs-empty-state" id="docsEmptyState">' +
+    "<h3>" + escapeHtml(t("docs_browse_title")) + "</h3>" +
+    "<p>" + escapeHtml(t("docs_browse_lead")) + "</p>" +
+    '<p class="docs-kbd"><kbd>/</kbd> ' + escapeHtml(t("docs_browse_keys")) + "</p></div>";
 }
 
 async function runDocSearch(q) {
   const hitsEl = document.getElementById("docHits");
-  const preview = document.getElementById("docPreview");
   if (!q.trim()) {
     hitsEl.innerHTML = "";
-    preview.classList.add("hidden");
+    selectedDocId = null;
+    showDocsEmptyState();
+    return;
+  }
+  if (!docsSearchEnabled) {
+    hitsEl.innerHTML = '<p class="empty">' + escapeHtml(t("docs_search_off")) + "</p>";
+    showDocsEmptyState();
     return;
   }
   hitsEl.innerHTML = '<p class="empty">' + t("docs_loading") + "</p>";
@@ -964,18 +1074,18 @@ async function runDocSearch(q) {
     const res = await fetch("/api/docs/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: q, top_k: 8 }),
+      body: JSON.stringify({ query: q, top_k: 12 }),
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     const hits = data.hits || [];
     if (!hits.length) {
       hitsEl.innerHTML = '<p class="empty">' + t("docs_empty") + "</p>";
-      preview.classList.add("hidden");
+      showDocsEmptyState();
       return;
     }
     hitsEl.innerHTML = hits.map(h =>
-      '<div class="doc-hit' + (h.id === selectedDocId ? " on" : "") + '" data-id="' + h.id + '">' +
+      '<div class="doc-hit' + (h.id === selectedDocId ? " on" : "") + '" data-id="' + escapeHtml(h.id) + '">' +
       "<b>" + escapeHtml(h.heading || h.path) + "</b>" +
       "<small>" + escapeHtml(h.path) + " · " + h.score.toFixed(2) + "</small>" +
       "<p>" + escapeHtml(h.snippet || "") + "</p></div>"
@@ -1001,65 +1111,80 @@ async function showDocChunk(id) {
     el.classList.toggle("on", el.getAttribute("data-id") === id);
   });
   const preview = document.getElementById("docPreview");
-  preview.classList.remove("hidden");
   preview.innerHTML = "<p class=\"empty\">" + t("docs_loading") + "</p>";
+  const query = document.getElementById("docQ")?.value || "";
   try {
-    const res = await fetch("/api/docs/chunks/" + encodeURIComponent(id));
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const c = await res.json();
-    preview.innerHTML =
-      "<h3>" + escapeHtml(c.heading || c.path) + "</h3>" +
-      "<small style=\"color:var(--muted)\">" + escapeHtml(c.path) +
-      " · L" + c.line_start + "–" + c.line_end + "</small>" +
-      "<div>" + escapeHtml(c.text || "") + "</div>";
+    const chunkRes = await fetch("/api/docs/chunks/" + encodeURIComponent(id));
+    if (!chunkRes.ok) throw new Error("HTTP " + chunkRes.status);
+    const chunk = await chunkRes.json();
+    const fileRes = await fetch(
+      "/api/docs/file?path=" + encodeURIComponent(chunk.path || ""),
+    );
+    if (!fileRes.ok) throw new Error("HTTP " + fileRes.status);
+    const file = await fileRes.json();
+    const renderDocPreview = await loadDocPreview();
+    await renderDocPreview(preview, {
+      path: file.path || chunk.path,
+      content: file.content || "",
+      chunk,
+      query,
+      escapeHtml,
+    });
   } catch (err) {
     preview.innerHTML = '<p class="empty">' + escapeHtml(String(err.message)) + "</p>";
   }
 }
 
 function refreshShelvesStatus(shelves) {
+  if (shelves) shelvesInfo = shelves;
   const el = document.getElementById("shelvesStatus");
   if (!el) return;
-  if (!shelves) {
+  if (!shelvesInfo) {
     el.classList.add("hidden");
     return;
   }
   el.classList.remove("hidden");
-  const chunks = Number(shelves.chunk_count ?? 0);
-  if (shelves.enabled) {
+  const chunks = Number(shelvesInfo.chunk_count ?? 0);
+  if (shelvesInfo.enabled) {
     el.textContent = t("shelves_on");
     el.className = "shelves-badge on";
-    el.title = chunks > 0 ? `Shelves enabled · ${chunks} chunks` : "Shelves enabled";
+    el.title = chunks > 0 ? `Shelves enabled · ${chunks} chunks` : "Shelves enabled · awaiting index";
+    if (appMode === "docs") refreshDocsChrome();
     return;
   }
   if (chunks > 0) {
-    el.textContent = t("shelves_cached").replace("{n}", String(chunks));
+    el.textContent = t("shelves_cached", { n: chunks });
     el.className = "shelves-badge off";
     el.title = `Shelves disabled · ${chunks} cached chunks (read-only)`;
+    if (appMode === "docs") refreshDocsChrome();
     return;
   }
   el.textContent = t("shelves_off");
   el.className = "shelves-badge off";
   el.title = "Shelves disabled";
+  if (appMode === "docs") refreshDocsChrome();
 }
 
 function initDocsSearch() {
   if (!docsPanelEnabled) return;
-  const tabDocs = document.getElementById("tabDocs");
-  tabDocs.classList.remove("hidden");
-  document.getElementById("tabScopes").onclick = () => switchAsideTab("scopes");
-  tabDocs.onclick = () => switchAsideTab("docs");
+  document.getElementById("modeDocs").classList.remove("hidden");
+  document.getElementById("modeRules").onclick = () => setAppMode("rules");
+  document.getElementById("modeDocs").onclick = () => setAppMode("docs");
+  document.getElementById("shelvesStatus").onclick = () => setAppMode("docs");
   const docQ = document.getElementById("docQ");
   if (!docsSearchEnabled) {
     docQ.disabled = true;
     docQ.placeholder = t("docs_search_off");
-    return;
+  } else {
+    docQ.disabled = false;
+    docQ.addEventListener("input", () => {
+      clearTimeout(docSearchTimer);
+      docSearchTimer = setTimeout(() => runDocSearch(docQ.value), 320);
+    });
   }
-  docQ.disabled = false;
-  docQ.addEventListener("input", () => {
-    clearTimeout(docSearchTimer);
-    docSearchTimer = setTimeout(() => runDocSearch(docQ.value), 320);
-  });
+  showDocsEmptyState();
+  refreshDocsChrome();
+  if (appMode === "docs") setAppMode("docs", false);
 }
 
 export async function boot() {

@@ -9,7 +9,11 @@
 <body>
 <header>
   <div class="brand">imprint <small id="stamp"></small></div>
-  <div class="toolbar">
+  <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="Workspace mode">
+    <button type="button" id="modeRules" class="on" role="tab" aria-selected="true" data-i18n="mode_rules">rules</button>
+    <button type="button" id="modeDocs" class="hidden" role="tab" aria-selected="false" data-i18n="mode_docs">docs</button>
+  </div>
+  <div class="toolbar" id="rulesToolbar">
     <input id="q" type="search" placeholder="Search claim, id, or scope" aria-label="Search" data-i18n-placeholder="search_ph" data-i18n-aria="search_aria">
     <select id="status" aria-label="Status" data-i18n-aria="status_aria">
       <option value="" data-i18n="status_all">all status</option>
@@ -33,12 +37,16 @@
     <button id="helpBtn" type="button" title="Help (?)" data-i18n-title="help_title_btn">?</button>
     <div class="stats" id="stats"></div>
   </div>
+  <div class="toolbar hidden" id="docsToolbar">
+    <input id="docQ" type="search" placeholder="Search documentation" data-i18n-placeholder="docs_ph" data-i18n-aria="docs_aria" aria-label="Search docs">
+    <div class="stats" id="docsStats"></div>
+  </div>
   <div class="header-status">
     <button id="shelvesStatus" type="button" class="shelves-badge hidden" title="Shelves"></button>
     <button id="langBtn" type="button" title="中文">中文</button>
   </div>
 </header>
-<div id="recipe">
+<div id="recipe" class="rules-chrome">
   <span id="recipeText">Loading…</span>
   <button id="clearBtn" type="button" data-i18n="clear">clear</button>
   <span class="edge-toggle">
@@ -47,24 +55,11 @@
     <label><input type="checkbox" id="eConflict" checked> <span data-i18n="conflict">conflict</span></label>
   </span>
 </div>
-<main>
+<main id="rulesMain">
   <aside class="scroll-panel">
-    <div class="aside-tabs" id="asideTabs">
-      <button type="button" id="tabScopes" class="on" data-i18n="tab_scopes">scopes</button>
-      <button type="button" id="tabDocs" class="hidden" data-i18n="tab_docs">docs</button>
-    </div>
-    <div id="scopesPanel">
-      <h2 data-i18n="scopes">Scopes</h2>
-      <p class="empty" id="scopesHint" data-i18n="scopes_hint">A tag keeps rules that include it. Filters stack.</p>
-      <div id="scopes"></div>
-    </div>
-    <div id="docsPanel" class="hidden">
-      <h2 data-i18n="docs_title">Documents</h2>
-      <p class="empty" data-i18n="docs_hint">Search workspace docs indexed by shelves (BM25).</p>
-      <input id="docQ" type="search" placeholder="Search documentation" data-i18n-placeholder="docs_ph" data-i18n-aria="docs_aria" aria-label="Search docs">
-      <div id="docHits" class="doc-hits"></div>
-      <article id="docPreview" class="doc-preview hidden"></article>
-    </div>
+    <h2 data-i18n="scopes">Scopes</h2>
+    <p class="empty" id="scopesHint" data-i18n="scopes_hint">A tag keeps rules that include it. Filters stack.</p>
+    <div id="scopes"></div>
   </aside>
   <div id="stage">
     <div id="overview" class="hidden scroll-panel"></div>
@@ -91,6 +86,23 @@
     <p class="empty" id="detailEmpty"></p>
   </section>
 </main>
+<section id="docsMain" class="docs-workspace hidden" aria-label="Document search">
+  <aside class="docs-sidebar scroll-panel">
+    <header class="docs-sidebar-head">
+      <h2 data-i18n="docs_title">Documents</h2>
+      <p class="empty" id="docsMeta" data-i18n="docs_hint">Workspace docs via built-in shelves (host API).</p>
+    </header>
+    <div id="docsNotice" class="docs-notice hidden"></div>
+    <div id="docHits" class="doc-hits"></div>
+  </aside>
+  <article class="docs-reader scroll-panel" id="docPreview">
+    <div class="docs-empty-state" id="docsEmptyState">
+      <h3 data-i18n="docs_browse_title">Search workspace documentation</h3>
+      <p data-i18n="docs_browse_lead">Indexed markdown from shelves roots (typically <code>docs/</code>). Use the search bar above or pick a result on the left.</p>
+      <p class="docs-kbd"><kbd>/</kbd> <span data-i18n="docs_browse_keys">focus search</span></p>
+    </div>
+  </article>
+</section>
 <div id="tip" role="tooltip"></div>
 <div id="helpPanel" role="dialog" aria-labelledby="helpTitle" hidden>
   <div class="help-card scroll-panel">

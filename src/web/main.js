@@ -1,4 +1,7 @@
-import { boot } from "./dashboard-app.js";
+import "./docs-markdown.css";
+import { applyEarlyMode, boot } from "./dashboard-app.js";
+
+applyEarlyMode();
 
 const banner = document.getElementById("loadBanner");
 

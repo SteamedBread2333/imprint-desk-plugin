@@ -107,6 +107,17 @@ export function createServer(cfg: DeskConfig) {
     }
   });
 
+  app.get("/api/docs/file", async (req, res) => {
+    try {
+      const path = String(req.query.path ?? "");
+      const qs = path ? `?path=${encodeURIComponent(path)}` : "";
+      const data = await proxyJson(cfg.hostUrl, `/docs/file${qs}`);
+      res.json(data);
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  });
+
   app.get("/api/docs/stats", async (_req, res) => {
     try {
       const data = await proxyJson(cfg.hostUrl, "/docs/stats");
