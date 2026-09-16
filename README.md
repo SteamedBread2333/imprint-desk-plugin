@@ -41,10 +41,11 @@ imprint desk open
 ## Screenshots
 
 <p align="center">Home: census list view (unfiltered).</p>
-<img width="1920" height="958" alt="imprint desk list view" src="https://github.com/user-attachments/assets/7795c4bc-2405-4cae-96c1-8fe6509d76ba" />
+<img width="1920" height="958" alt="imprint desk list view" src="https://github.com/user-attachments/assets/957e4c4a-e80a-4ae1-9e93-9e83ad3472a2" />
 
 <p align="center">Graph view: radial relation map, scope-colored nodes.</p>
-<img width="1920" height="958" alt="imprint desk graph view" src="https://github.com/user-attachments/assets/765d9219-464f-420c-895b-0884c1578d30" />
+<img width="1920" height="958" alt="imprint desk graph view" src="https://github.com/user-attachments/assets/6011309f-45b8-46f8-b266-3172332f902c" />
+
 
 ## Environment
 
