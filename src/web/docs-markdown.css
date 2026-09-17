@@ -136,9 +136,51 @@ mark.search-hl {
   border-radius: 4px;
 }
 
+.doc-rule-range {
+  background: rgba(224, 160, 74, 0.14);
+  border-left: 3px solid var(--gold);
+  padding: 0.65em 0.9em;
+  margin: 0.75em 0 1.1em;
+  border-radius: 0 8px 8px 0;
+  box-shadow: inset 0 0 0 1px rgba(212, 180, 131, 0.28);
+}
+
+.doc-rule-range mark.search-hl {
+  background: rgba(224, 160, 74, 0.45);
+  box-shadow: 0 0 0 1px rgba(224, 160, 74, 0.65);
+}
+
 .doc-match-anchor {
   display: inline;
   width: 0;
   height: 0;
   overflow: hidden;
+}
+
+.doc-render-error {
+  margin: 0 0 1em;
+  padding: 12px 14px;
+  border: 1px solid var(--conflict);
+  border-radius: 8px;
+  background: rgba(224, 112, 96, 0.12);
+  color: var(--gold-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.doc-render-error p { margin: 0 0 6px; }
+.doc-render-error p:last-child { margin-bottom: 0; }
+
+.doc-render-fallback {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0c0a08;
+  color: var(--ink);
+  font: 12px/1.55 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  max-height: min(70vh, 640px);
 }

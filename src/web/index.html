@@ -12,6 +12,7 @@
   <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="Workspace mode">
     <button type="button" id="modeRules" class="on" role="tab" aria-selected="true" data-i18n="mode_rules">rules</button>
     <button type="button" id="modeDocs" class="hidden" role="tab" aria-selected="false" data-i18n="mode_docs">docs</button>
+    <button type="button" id="modeUnified" class="hidden" role="tab" aria-selected="false" data-i18n="mode_unified">unified</button>
   </div>
   <div class="toolbar" id="rulesToolbar">
     <input id="q" type="search" placeholder="Search claim, id, or scope" aria-label="Search" data-i18n-placeholder="search_ph" data-i18n-aria="search_aria">
@@ -53,6 +54,8 @@
     <label><input type="checkbox" id="eRelated" checked> <span data-i18n="related">related</span></label>
     <label><input type="checkbox" id="eSuper" checked> <span data-i18n="super">supersede</span></label>
     <label><input type="checkbox" id="eConflict" checked> <span data-i18n="conflict">conflict</span></label>
+    <label class="unified-edge"><input type="checkbox" id="eSources" checked> <span data-i18n="edge_sources">sources</span></label>
+    <label class="unified-edge"><input type="checkbox" id="eCitedBy" checked> <span data-i18n="edge_cited">cited</span></label>
   </span>
 </div>
 <main id="rulesMain">
@@ -73,6 +76,8 @@
           <div class="edge-key"><span class="swatch line related" aria-hidden="true"></span><span data-i18n="related">related</span></div>
           <div class="edge-key"><span class="swatch line super" aria-hidden="true"></span><span data-i18n="super">supersede</span></div>
           <div class="edge-key"><span class="swatch line conflict" aria-hidden="true"></span><span data-i18n="conflict">conflict</span></div>
+          <div class="edge-key unified-edge"><span class="swatch line sources" aria-hidden="true"></span><span data-i18n="edge_sources">sources</span></div>
+          <div class="edge-key unified-edge"><span class="swatch line cited_by" aria-hidden="true"></span><span data-i18n="edge_cited">cited</span></div>
         </div>
         <div class="legend-note" id="legendNodes"></div>
       </div>
@@ -111,6 +116,16 @@
     <div class="help-grid" id="helpGrid"></div>
     <p style="margin:18px 0 0;text-align:right"><button type="button" id="helpClose"></button></p>
   </div>
+</div>
+<div id="sourceDrawer" class="source-drawer" hidden aria-hidden="true">
+  <button type="button" class="source-drawer-backdrop" id="sourceDrawerBackdrop" aria-label="Close preview"></button>
+  <aside class="source-drawer-panel scroll-panel" role="dialog" aria-labelledby="sourceDrawerTitle">
+    <header class="source-drawer-head">
+      <h2 id="sourceDrawerTitle" data-i18n="source_drawer_title">Document preview</h2>
+      <button type="button" id="sourceDrawerClose" data-i18n="close">close</button>
+    </header>
+    <div id="sourceDrawerBody" class="source-drawer-body"></div>
+  </aside>
 </div>
 <div id="loadBanner" class="load-banner hidden" role="alert"></div>
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>

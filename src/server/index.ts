@@ -54,6 +54,16 @@ export function createServer(cfg: DeskConfig) {
     }
   });
 
+  app.get("/api/graph/unified", async (req, res) => {
+    try {
+      const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+      const data = await proxyJson(cfg.hostUrl, `/graph/unified${qs}`);
+      res.json(data);
+    } catch (err) {
+      res.status(502).json({ error: String(err) });
+    }
+  });
+
   app.get("/api/rules", async (req, res) => {
     try {
       const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";

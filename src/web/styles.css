@@ -138,6 +138,9 @@
   .d3-link.related { stroke: #d4b483; stroke-width: 1.35; stroke-dasharray: 5 4; opacity: 0.75; }
   .d3-link.supersedes { stroke: #e07060; stroke-width: 2; opacity: 0.9; }
   .d3-link.conflicts_with { stroke: #e0a04a; stroke-width: 2.2; opacity: 0.9; }
+  .d3-link.sources { stroke: #6ec4c0; stroke-width: 1.8; opacity: 0.85; }
+  .d3-link.cited_by { stroke: #a78bfa; stroke-width: 1.5; stroke-dasharray: 3 3; opacity: 0.8; }
+  .d3-link.contains, .d3-link.directory, .d3-link.sequence { stroke: #7a736c; stroke-width: 1; opacity: 0.35; }
   .d3-link.dim { opacity: 0.08; }
   .d3-node { cursor: pointer; }
   .d3-node.dim { opacity: 0.14; }
@@ -213,6 +216,14 @@
   .edge-key .swatch.line { width: 22px; height: 0; border-radius: 0; border-top: 2px solid; }
   .edge-key .swatch.line.related { border-color: #d4b483; border-top-style: dashed; }
   .edge-key .swatch.line.super { border-color: var(--super); }
+  .edge-key .swatch.line.sources { border-color: #6ec4c0; }
+  .edge-key .swatch.line.cited_by { border-color: #a78bfa; border-top-style: dashed; }
+  body.unified-mode .edge-toggle label:not(.unified-edge) { display: none; }
+  body:not(.unified-mode) .unified-edge { display: none; }
+  .d3-node.doc-node circle { stroke-dasharray: 3 2; }
+  .doc-links { margin: 12px 0; }
+  .doc-links h3 { font-size: 0.85rem; margin: 0 0 6px; color: var(--muted); }
+  .doc-links .id-link { margin-right: 6px; }
   .edge-key .swatch.line.conflict { border-color: var(--conflict); border-top-width: 2.2px; }
   .help-edges { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
   .help-card .edge-key { color: var(--ink); }
@@ -310,6 +321,71 @@
     font: 14px/1.4 system-ui, sans-serif; border-bottom: 1px solid var(--gold);
   }
   .load-banner.hidden { display: none; }
+  .source-drawer {
+    position: fixed; inset: 0; z-index: 40;
+    visibility: hidden; pointer-events: none;
+  }
+  .source-drawer:not([hidden]) { visibility: visible; }
+  .source-drawer.open { pointer-events: auto; }
+  .source-drawer-backdrop {
+    position: absolute; inset: 0; border: 0; padding: 0; margin: 0;
+    background: rgba(8, 7, 6, 0.42); cursor: pointer;
+    opacity: 0;
+    backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
+    transition:
+      opacity 0.38s cubic-bezier(0.32, 0.72, 0, 1),
+      backdrop-filter 0.38s cubic-bezier(0.32, 0.72, 0, 1),
+      -webkit-backdrop-filter 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .source-drawer.open .source-drawer-backdrop {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .source-drawer-panel {
+    position: absolute; top: 0; right: 0; bottom: 0; width: min(720px, 92vw);
+    background: var(--bg-2); border-left: 1px solid var(--line);
+    box-shadow: -16px 0 48px rgba(0, 0, 0, 0.5);
+    display: flex; flex-direction: column; min-height: 0;
+    transform: translate3d(104%, 0, 0);
+    will-change: transform;
+    transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .source-drawer.open .source-drawer-panel { transform: translate3d(0, 0, 0); }
+  .source-drawer-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--line); flex: none;
+  }
+  .source-drawer-head h2 {
+    margin: 0; font-family: var(--serif); font-size: 20px; color: var(--gold-2);
+  }
+  .source-drawer-body {
+    flex: 1; min-height: 0; overflow: auto; padding: 20px 24px 32px;
+    background: radial-gradient(900px 600px at 30% 0%, #1b1712 0%, #100e0c 70%);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+    transition:
+      opacity 0.24s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .source-drawer.open .source-drawer-body {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition-delay: 0.07s;
+  }
+  .meta .source-link { display: inline; text-align: left; }
+  body.source-drawer-open { overflow: hidden; }
+  @media (prefers-reduced-motion: reduce) {
+    .source-drawer-backdrop,
+    .source-drawer-panel,
+    .source-drawer-body {
+      transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
+    }
+  }
   @media (max-width: 960px) {
     main { grid-template-columns: 1fr; grid-template-rows: 160px minmax(520px, 1fr) minmax(220px, auto); }
     aside, .detail { border: 0; border-top: 1px solid var(--line); }
