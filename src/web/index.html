@@ -59,10 +59,30 @@
   </span>
 </div>
 <main id="rulesMain">
-  <aside class="scroll-panel">
-    <h2 data-i18n="scopes">Scopes</h2>
-    <p class="empty" id="scopesHint" data-i18n="scopes_hint">A tag keeps rules that include it. Filters stack.</p>
-    <div id="scopes"></div>
+  <aside class="scroll-panel" id="filterAside">
+    <div id="rulesScopesPanel">
+      <h2 data-i18n="scopes">Scopes</h2>
+      <p class="empty" id="scopesHint" data-i18n="scopes_hint">A tag keeps rules that include it. Filters stack.</p>
+      <div id="scopes"></div>
+    </div>
+    <div id="unifiedFilterPanel" class="hidden">
+      <h2 data-i18n="filter_title">Filter</h2>
+      <div class="facet-group">
+        <h3 data-i18n="facet_nodes">Nodes</h3>
+        <div class="facet-radio" role="radiogroup" aria-label="Node type">
+          <label><input type="radio" name="unifiedNodeType" value="all" checked> <span data-i18n="nodes_all">all</span></label>
+          <label><input type="radio" name="unifiedNodeType" value="rules"> <span data-i18n="nodes_rules">rules</span></label>
+          <label><input type="radio" name="unifiedNodeType" value="docs"> <span data-i18n="nodes_docs">docs</span></label>
+        </div>
+      </div>
+      <div class="facet-group">
+        <h3 data-i18n="facet_scopes">Scope</h3>
+        <input id="scopeSearch" type="search" data-i18n-placeholder="scope_search_ph" data-i18n-aria="scope_search_aria" placeholder="Filter scopes…" aria-label="Filter scopes">
+        <div id="unifiedScopes"></div>
+        <button type="button" id="scopeExpandBtn" class="facet-expand hidden" data-i18n="scope_expand">Show all scopes</button>
+      </div>
+      <p class="empty facet-hint" data-i18n="unified_scope_hint">Click a scope to focus. ⌘/Ctrl+click for AND. Click again to clear.</p>
+    </div>
   </aside>
   <div id="stage">
     <div id="overview" class="hidden scroll-panel"></div>

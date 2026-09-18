@@ -37,7 +37,7 @@ const I18N = {
     scopes: "Scopes", scopes_hint: "A tag keeps rules that include it. Filters stack.",
     no_scopes: "No scopes yet.",
     legend_title: "Relation graph", legend_sub: "colour is scope",
-    legend_nodes: "Drag nodes · click to focus · size is confidence · <kbd>?</kbd> help",
+    legend_nodes: "Drag nodes · click for detail · size is confidence · <kbd>?</kbd> help",
     detail_empty: "This panel is for links — who replaces whom, what sits nearby. Pick a colour or a node. <kbd>?</kbd>",
     recipe_home_list: "The whole vault, as a census.",
     recipe_home_map: "Every matching node on the graph.",
@@ -61,7 +61,7 @@ const I18N = {
     help_home: "Home",
     help_home_d: "The list / graph switch appears only on the home page, with no filters. List is the census. Graph is every node.",
     help_map: "Graph",
-    help_map_d: "Click a node to pin it at the centre and re-run the layout. Drag any node to rearrange. The corner card lists scope colours and edge types.",
+    help_map_d: "Click a node to open its detail panel — the graph layout stays put. Drag any node to rearrange. The corner card lists scope colours and edge types.",
     help_edges: "Lines",
     help_edges_d: "<div class=\"help-edges\"><div class=\"edge-key\"><span class=\"swatch line super\" aria-hidden=\"true\"></span>supersede (new → old)</div><div class=\"edge-key\"><span class=\"swatch line related\" aria-hidden=\"true\"></span>related</div><div class=\"edge-key\"><span class=\"swatch line conflict\" aria-hidden=\"true\"></span>conflict</div></div>Uncheck a kind in the bar to hide it.",
     help_labels: "Labels",
@@ -89,7 +89,22 @@ const I18N = {
     meta_sources: "document sources",
     unified_lead: "Rules, docs, and vault sources on one graph.",
     doc_node: "document",
-    source_drawer_title: "Document preview"
+    source_drawer_title: "Document preview",
+    filter_title: "Filter",
+    facet_nodes: "Nodes",
+    facet_scopes: "Scope",
+    nodes_all: "all",
+    nodes_rules: "rules only",
+    nodes_docs: "docs only",
+    scope_search_ph: "Filter scopes…",
+    scope_search_aria: "Filter scopes",
+    scope_expand: "Show all scopes",
+    scope_collapse: "Show fewer",
+    unified_scope_hint: "Click a scope to focus. ⌘/Ctrl+click for AND. Click again to clear.",
+    recipe_focus: "Focus",
+    chip_nodes: "nodes",
+    unified_stats: "{rules} rules · {docs} docs · {n} shown",
+    scope_count: "{match}<sub>/{total}</sub>",
   },
   zh: {
     search_ph: "搜索 claim、id 或 scope", search_aria: "搜索",
@@ -103,7 +118,7 @@ const I18N = {
     scopes: "范围", scopes_hint: "点一个标签，留下带它的规则。条件会叠在一起。",
     no_scopes: "还没有 scope。",
     legend_title: "关系图", legend_sub: "颜色是 scope",
-    legend_nodes: "可拖拽节点 · 点击聚焦 · 点的大小是置信度 · <kbd>?</kbd> 帮助",
+    legend_nodes: "可拖拽节点 · 点击查看详情 · 点的大小是置信度 · <kbd>?</kbd> 帮助",
     detail_empty: "这边看关系：谁替代谁、谁挨着谁。点一颗颜色或一个节点。<kbd>?</kbd>",
     recipe_home_list: "整库普查。",
     recipe_home_map: "全部命中节点都在关系图上。",
@@ -127,7 +142,7 @@ const I18N = {
     help_home: "首页",
     help_home_d: "列表 / 关系图开关只在首页出现（没有任何筛选）。列表是普查，关系图是全部节点。",
     help_map: "关系图",
-    help_map_d: "点击节点会固定在中心并重新布局。可拖拽任意节点。角落卡片列出 scope 颜色与线的图例。",
+    help_map_d: "点击节点打开右侧详情，关系图布局不变。可拖拽任意节点。角落卡片列出 scope 颜色与线的图例。",
     help_edges: "线",
     help_edges_d: "<div class=\"help-edges\"><div class=\"edge-key\"><span class=\"swatch line super\" aria-hidden=\"true\"></span>替代（新 → 旧）</div><div class=\"edge-key\"><span class=\"swatch line related\" aria-hidden=\"true\"></span>关联</div><div class=\"edge-key\"><span class=\"swatch line conflict\" aria-hidden=\"true\"></span>冲突</div></div>在筛选条里取消勾选即可藏起。",
     help_labels: "标签",
@@ -155,7 +170,22 @@ const I18N = {
     meta_sources: "文档来源",
     unified_lead: "规则、文档与 vault sources 同屏关系图。",
     doc_node: "文档",
-    source_drawer_title: "文档预览"
+    source_drawer_title: "文档预览",
+    filter_title: "筛选",
+    facet_nodes: "节点",
+    facet_scopes: "范围",
+    nodes_all: "全部",
+    nodes_rules: "仅规则",
+    nodes_docs: "仅文档",
+    scope_search_ph: "搜索 scope…",
+    scope_search_aria: "搜索 scope",
+    scope_expand: "展开全部 scope",
+    scope_collapse: "收起",
+    unified_scope_hint: "点 scope 聚焦；⌘/Ctrl+点击 AND 多选；再点取消。",
+    recipe_focus: "聚焦",
+    chip_nodes: "节点",
+    unified_stats: "{rules} 规则 · {docs} 文档 · 显示 {n}",
+    scope_count: "{match}<sub>/{total}</sub>",
   }
 };
 function defaultView() {
@@ -183,7 +213,12 @@ let lastPushed = null;
 let edgeIndex = {};
 let scopeCounts = {};
 let scopeList = [];
-let scopesEl, sf;
+let activeScopes = [];
+let unifiedNodeType = "all";
+let scopeSearchQuery = "";
+let scopesExpanded = false;
+const UNIFIED_SCOPES_COLLAPSED = 8;
+let scopesEl, unifiedScopesEl, sf;
 let host, svg, gRoot, gLinks, gNodes, zoom;
 let appStarted = false;
 let pollTimer = null;
@@ -227,6 +262,7 @@ function defaultDocsState() {
 function defaultUnifiedState() {
   return {
     q: "", status: "", conf: "0", scope: "",
+    nodeType: "all",
     sources: true, cited: true, id: null, labels: "off",
   };
 }
@@ -249,7 +285,8 @@ function captureUnifiedState() {
     q: document.getElementById("q").value,
     status: document.getElementById("status").value,
     conf: document.getElementById("conf").value,
-    scope: document.getElementById("scopeFilter").value,
+    scope: scopesParam(activeScopes),
+    nodeType: unifiedNodeType,
     sources: document.getElementById("eSources").checked,
     cited: document.getElementById("eCitedBy").checked,
     id: selectedId,
@@ -285,7 +322,11 @@ function applyUnifiedState(st) {
   document.getElementById("q").value = st.q || "";
   document.getElementById("status").value = st.status || "";
   document.getElementById("conf").value = st.conf || "0";
-  if (sf) sf.value = st.scope || "";
+  activeScopes = parseScopesParam(st.scope || "");
+  unifiedNodeType = st.nodeType || "all";
+  if (!["all", "rules", "docs"].includes(unifiedNodeType)) unifiedNodeType = "all";
+  const nodeRadio = document.querySelector(`input[name="unifiedNodeType"][value="${unifiedNodeType}"]`);
+  if (nodeRadio) nodeRadio.checked = true;
   document.getElementById("eSources").checked = st.sources !== false;
   document.getElementById("eCitedBy").checked = st.cited !== false;
   viewMode = "graph";
@@ -352,6 +393,162 @@ function graphFromUnified(ug) {
   return { nodes, edges: ug.edges || [], generated_at: ug.generated_at };
 }
 
+function parseScopesParam(raw) {
+  if (!raw) return [];
+  return raw.split(",").map(s => s.trim()).filter(Boolean);
+}
+function scopesParam(scopes) {
+  return scopes.length ? scopes.join(",") : "";
+}
+function getActiveScopes() {
+  if (isUnifiedMode()) return activeScopes;
+  return sf?.value ? [sf.value] : [];
+}
+function hasScopeFilter() {
+  return getActiveScopes().length > 0;
+}
+function ruleMatchesScopes(n, scopes) {
+  if (!scopes.length) return true;
+  const tags = n.scope || [];
+  return scopes.every(s => tags.includes(s));
+}
+function hasNonScopeFilters() {
+  return Boolean(document.getElementById("q").value.trim())
+    || Boolean(document.getElementById("status").value)
+    || parseFloat(document.getElementById("conf").value) > 0;
+}
+function isHomeUnified() {
+  return !hasScopeFilter() && !hasNonScopeFilters();
+}
+function nodeById(id) {
+  return activeData().nodes.find(x => x.id === id);
+}
+function isRuleNode(n) {
+  return !n._kind || n._kind === "rule";
+}
+function rulePassesBaseFilters(n) {
+  if (!isRuleNode(n)) return false;
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const st = document.getElementById("status").value;
+  const conf = parseFloat(document.getElementById("conf").value);
+  if (st && n.status !== st) return false;
+  if (n.confidence < conf) return false;
+  if (q) {
+    const hay = (n.id + " " + n.claim + " " + (n.scope || []).join(" ")).toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+function visibleRules() {
+  const scopes = getActiveScopes();
+  return activeData().nodes.filter(n =>
+    isRuleNode(n) && rulePassesBaseFilters(n) && ruleMatchesScopes(n, scopes)
+  );
+}
+function unifiedFocusActive() {
+  return hasScopeFilter() || hasNonScopeFilters() || unifiedNodeType !== "all";
+}
+function connectedDocIds(ruleIds) {
+  const seen = new Set(ruleIds);
+  const docs = new Set();
+  let frontier = new Set(ruleIds);
+  const edges = activeData().edges || [];
+  while (frontier.size) {
+    const next = new Set();
+    edges.forEach(e => {
+      if (!edgeOn(e.kind)) return;
+      if (frontier.has(e.source) && !seen.has(e.target)) {
+        const target = nodeById(e.target);
+        if (target && !isRuleNode(target)) {
+          seen.add(e.target);
+          docs.add(e.target);
+          next.add(e.target);
+        }
+      }
+      if (frontier.has(e.target) && !seen.has(e.source)) {
+        const source = nodeById(e.source);
+        if (source && !isRuleNode(source)) {
+          seen.add(e.source);
+          docs.add(e.source);
+          next.add(e.source);
+        }
+      }
+    });
+    frontier = next;
+  }
+  return docs;
+}
+function scopeMatchCount(scope) {
+  return activeData().nodes.filter(n =>
+    isRuleNode(n) && rulePassesBaseFilters(n) && (n.scope || []).includes(scope)
+  ).length;
+}
+function pickScope(scope, andMode) {
+  if (!isUnifiedMode()) {
+    if (sf.value === scope) sf.value = "";
+    else sf.value = scope;
+    viewMode = "graph";
+    commit("push");
+    return;
+  }
+  const idx = activeScopes.indexOf(scope);
+  if (andMode) {
+    if (idx >= 0) activeScopes.splice(idx, 1);
+    else activeScopes.push(scope);
+  } else if (idx >= 0 && activeScopes.length === 1) {
+    activeScopes = [];
+  } else if (idx >= 0) {
+    activeScopes.splice(idx, 1);
+  } else {
+    activeScopes = [scope];
+  }
+  viewMode = "graph";
+  commit("push");
+}
+function clearAllScopes() {
+  activeScopes = [];
+  if (sf) sf.value = "";
+}
+function renderUnifiedFilterPanel() {
+  if (!unifiedScopesEl) return;
+  const q = scopeSearchQuery.trim().toLowerCase();
+  let list = scopeList;
+  if (q) list = list.filter(s => s.toLowerCase().includes(q));
+  const needExpand = !scopesExpanded && list.length > UNIFIED_SCOPES_COLLAPSED;
+  const shown = needExpand ? list.slice(0, UNIFIED_SCOPES_COLLAPSED) : list;
+  const expandBtn = document.getElementById("scopeExpandBtn");
+  if (expandBtn) {
+    expandBtn.classList.toggle("hidden", list.length <= UNIFIED_SCOPES_COLLAPSED);
+    expandBtn.textContent = scopesExpanded ? t("scope_collapse") : t("scope_expand");
+  }
+  if (!shown.length) {
+    unifiedScopesEl.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
+    return;
+  }
+  unifiedScopesEl.innerHTML = shown.map(s => {
+    const match = scopeMatchCount(s);
+    const total = scopeCounts[s] || 0;
+    const active = activeScopes.includes(s);
+    const dim = match === 0 && !active;
+    const countHtml = t("scope_count", { match, total });
+    return `<div class="scope-item${active ? " active" : ""}${dim ? " dim" : ""}" data-scope="${esc(s)}" role="button" tabindex="0">` +
+      `<span class="dot" style="background:${scopeColor(s)}"></span>` +
+      `<span>${esc(s)}</span>` +
+      `<span class="count">${countHtml}</span></div>`;
+  }).join("");
+  unifiedScopesEl.querySelectorAll(".scope-item").forEach(row => {
+    const s = row.dataset.scope;
+    const activate = ev => pickScope(s, ev.metaKey || ev.ctrlKey);
+    row.onclick = activate;
+    row.onkeydown = ev => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        activate(ev);
+      }
+    };
+  });
+}
+
 function t(key, vars) {
   const table = I18N[lang] || I18N.en;
   let s = table[key] || I18N.en[key] || key;
@@ -359,6 +556,7 @@ function t(key, vars) {
   return s;
 }
 function isHome() {
+  if (isUnifiedMode()) return isHomeUnified() && unifiedNodeType === "all";
   return !document.getElementById("scopeFilter").value
     && !document.getElementById("q").value.trim()
     && !document.getElementById("status").value
@@ -376,11 +574,12 @@ function queryString() {
   const q = document.getElementById("q").value.trim();
   const st = document.getElementById("status").value;
   const conf = document.getElementById("conf").value;
-  const sc = document.getElementById("scopeFilter").value;
+  const scopes = getActiveScopes();
   if (q) p.set("q", q);
   if (st) p.set("status", st);
   if (conf && conf !== "0") p.set("conf", conf);
-  if (sc) p.set("scope", sc);
+  if (scopes.length) p.set("scope", scopesParam(scopes));
+  if (isUnifiedMode() && unifiedNodeType !== "all") p.set("nodes", unifiedNodeType);
   if (selectedId) p.set("id", selectedId);
   if (labelMode !== "auto") p.set("labels", labelMode);
   if (appMode === "rules") {
@@ -425,9 +624,21 @@ function applyQuery(search) {
   const conf = p.get("conf") || "0";
   const confEl = document.getElementById("conf");
   confEl.value = [...confEl.options].some(o => o.value === conf) ? conf : "0";
-  const sc = p.get("scope") || "";
+  const parsedScopes = parseScopesParam(p.get("scope") || "");
   const sfEl = document.getElementById("scopeFilter");
-  sfEl.value = [...sfEl.options].some(o => o.value === sc) ? sc : "";
+  if (appMode === "unified") {
+    activeScopes = parsedScopes;
+  } else {
+    activeScopes = parsedScopes;
+    const sc = parsedScopes[0] || "";
+    sfEl.value = [...sfEl.options].some(o => o.value === sc) ? sc : "";
+  }
+  if (appMode === "unified") {
+    unifiedNodeType = p.get("nodes") || "all";
+    if (!["all", "rules", "docs"].includes(unifiedNodeType)) unifiedNodeType = "all";
+    const nodeRadio = document.querySelector(`input[name="unifiedNodeType"][value="${unifiedNodeType}"]`);
+    if (nodeRadio) nodeRadio.checked = true;
+  }
   selectedId = p.get("id") || null;
   const lb = p.get("labels");
   labelMode = (lb === "on" || lb === "off" || lb === "auto") ? lb : "off";
@@ -466,8 +677,9 @@ function applyLang() {
     "<dt>" + t("help_keys") + "</dt><dd class=\"keylist\">" + t("help_keys_d") + "</dd></div>";
   const empty = document.getElementById("detailEmpty");
   if (empty) empty.innerHTML = t("detail_empty");
-  if (!scopeList.length) scopesEl.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
+  if (!scopeList.length && scopesEl) scopesEl.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
   if (appMode === "docs") refreshDocsChrome();
+  else if (appMode === "unified" && appStarted) renderUnifiedFilterPanel();
 }
 function commit(mode) {
   savePageState(appMode);
@@ -518,8 +730,10 @@ function shortLabel(n) {
 }
 function parentScope(n) {
   if (n._kind && n._kind !== "rule") return "doc";
-  const sc = sf.value;
-  if (sc && (n.scope || []).includes(sc)) return sc;
+  const scopes = getActiveScopes();
+  for (const sc of scopes) {
+    if ((n.scope || []).includes(sc)) return sc;
+  }
   if (n.scope && n.scope[0]) return n.scope[0];
   return "";
 }
@@ -537,24 +751,31 @@ function scopeColor(name) {
   return SCOPE_PALETTE[(h >>> 0) % SCOPE_PALETTE.length];
 }
 function openGraph(scope) {
-  if (scope != null) sf.value = scope;
+  if (scope != null) {
+    if (isUnifiedMode()) activeScopes = scope ? [scope] : [];
+    else if (sf) sf.value = scope;
+  }
   viewMode = "graph";
   commit("push");
 }
 function visible(n) {
-  if (isUnifiedMode() && n._kind && n._kind !== "rule") return true;
-  const q = document.getElementById("q").value.trim().toLowerCase();
-  const st = document.getElementById("status").value;
-  const conf = parseFloat(document.getElementById("conf").value);
-  const sc = document.getElementById("scopeFilter").value;
-  if (st && n.status !== st) return false;
-  if (n.confidence < conf) return false;
-  if (sc && !(n.scope || []).includes(sc)) return false;
-  if (q) {
-    const hay = (n.id + " " + n.claim + " " + (n.scope || []).join(" ")).toLowerCase();
-    if (!hay.includes(q)) return false;
+  if (!isUnifiedMode()) {
+    const scopes = getActiveScopes();
+    if (!rulePassesBaseFilters(n)) return false;
+    if (!ruleMatchesScopes(n, scopes)) return false;
+    return true;
   }
-  return true;
+  if (isRuleNode(n)) {
+    if (unifiedNodeType === "docs") return false;
+    const scopes = getActiveScopes();
+    return rulePassesBaseFilters(n) && ruleMatchesScopes(n, scopes);
+  }
+  if (unifiedNodeType === "rules") return false;
+  if (!unifiedFocusActive()) return true;
+  const ruleIds = visibleRules().map(r => r.id);
+  if (!ruleIds.length && hasScopeFilter()) return false;
+  if (!ruleIds.length && hasNonScopeFilters()) return false;
+  return connectedDocIds(ruleIds).has(n.id);
 }
 function filtered() { return activeData().nodes.filter(visible); }
 function edgeOn(kind) {
@@ -572,17 +793,21 @@ function paintLegend(names) {
   const keys = (names && names.length) ? names : scopeList;
   const box = document.getElementById("legendScopes");
   const focus = document.getElementById("legendFocus");
-  const cur = sf.value;
+  const selected = new Set(getActiveScopes());
+  const readOnly = isUnifiedMode();
+  const tag = readOnly ? "span" : "button";
   box.innerHTML = keys.map(s =>
-    `<button type="button" class="palette-dot${cur === s ? " on" : ""}" data-scope="${esc(s)}" style="background:${scopeColor(s)}" title="${esc(s)}" aria-label="${esc(s)}" role="listitem"></button>`
+    `<${tag} ${readOnly ? "" : 'type="button"'} class="palette-dot${selected.has(s) ? " on" : ""}" data-scope="${esc(s)}" style="background:${scopeColor(s)}" title="${esc(s)}" aria-label="${esc(s)}" role="listitem"></${tag}>`
   ).join("");
   focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>';
   box.querySelectorAll(".palette-dot").forEach(btn => {
     const s = btn.getAttribute("data-scope");
-    const n = scopeCounts[s] || 0;
-    btn.onmouseenter = () => { focus.innerHTML = `${esc(s)} <span class="n"> · ${n}</span>`; };
+    const total = scopeCounts[s] || 0;
+    const match = isUnifiedMode() ? scopeMatchCount(s) : total;
+    const countLabel = isUnifiedMode() && match !== total ? `${match}/${total}` : String(total);
+    btn.onmouseenter = () => { focus.innerHTML = `${esc(s)} <span class="n"> · ${countLabel}</span>`; };
     btn.onmouseleave = () => { focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>'; };
-    btn.onclick = () => openGraph(s);
+    if (!readOnly) btn.onclick = () => pickScope(s, false);
   });
 }
 function setHelp(open) {
@@ -600,22 +825,32 @@ function nodeRadius(n, focused) {
   if (n._kind && n._kind !== "rule") return 5 + (focused ? 4 : 0);
   return 7 + Math.round((n.confidence || 0) * 10) + (focused ? 6 : 0);
 }
-function applyFocusPin(nodes) {
+function applySelectionStyle(nodes) {
   nodes.forEach(n => {
-    if (n.id === selectedId) {
-      n.fx = 0;
-      n.fy = 0;
-      n.hub = true;
-      n.r = nodeRadius(n, true);
-    } else {
-      if (n.hub) {
-        n.fx = null;
-        n.fy = null;
-      }
-      n.hub = false;
-      n.r = nodeRadius(n, false);
+    if (n.hub) {
+      n.fx = null;
+      n.fy = null;
     }
+    n.hub = false;
+    n.r = nodeRadius(n, n.id === selectedId);
   });
+}
+function refreshGraphSelection() {
+  if (!gNodes) return;
+  applySelectionStyle(graphNodes);
+  gNodes.selectAll("g.d3-node")
+    .classed("hub", false)
+    .classed("hot", d => d.id === selectedId)
+    .select("circle")
+    .attr("r", d => d.r);
+  applyLabelOpacity();
+}
+function selectGraphNode(d) {
+  selectedId = d.id;
+  if (d._kind && d._kind !== "rule") showDocNode(d);
+  else show(d);
+  refreshGraphSelection();
+  pushQuery();
 }
 function seedGraphPositions(nodes) {
   const loose = nodes.filter(n => n.x == null || n.y == null);
@@ -676,10 +911,8 @@ function dragged(event, d) {
 }
 function dragEnded(event, d) {
   if (!event.active) simulation.alphaTarget(0);
-  if (d.id !== selectedId) {
-    d.fx = null;
-    d.fy = null;
-  }
+  d.fx = null;
+  d.fy = null;
 }
 function initForceSimulation() {
   simulation = d3.forceSimulation()
@@ -804,7 +1037,7 @@ function showGraph(allFiltered, opts = {}) {
     next.r = nodeRadius(n, n.id === selectedId);
     return next;
   });
-  applyFocusPin(graphNodes);
+  applySelectionStyle(graphNodes);
   seedGraphPositions(graphNodes);
   const byId = {};
   graphNodes.forEach(n => { byId[n.id] = n; });
@@ -836,21 +1069,7 @@ function showGraph(allFiltered, opts = {}) {
     .call(graphDrag)
     .on("click", (ev, d) => {
       ev.stopPropagation();
-      if (d._kind && d._kind !== "rule") {
-        showDocNode(d);
-        selectedId = d.id;
-        commit("push");
-        return;
-      }
-      const refocus = selectedId !== d.id;
-      selectedId = d.id;
-      applyFocusPin(graphNodes);
-      show(d);
-      if (refocus) commit("push");
-      else {
-        simulation.alpha(0.85).restart();
-        pushQuery();
-      }
+      selectGraphNode(d);
     })
     .on("mouseenter", (ev, d) => spotlight(d, ev))
     .on("mouseleave", () => { clearDim(); hideTip(); });
@@ -894,27 +1113,57 @@ function recipe() {
   const q = document.getElementById("q").value.trim();
   const st = document.getElementById("status").value;
   const conf = parseFloat(document.getElementById("conf").value);
-  const sc = sf.value;
+  const scopes = getActiveScopes();
   if (q) parts.push(`<span class="chip">${t("chip_search")} “${esc(q)}” <button type="button" data-clear="q" aria-label="${t("clear")}">×</button></span>`);
   if (st) parts.push(`<span class="chip">${t("chip_status")} ${esc(st)} <button type="button" data-clear="status">×</button></span>`);
   if (conf > 0) parts.push(`<span class="chip">${t("chip_conf")} ≥ ${conf} <button type="button" data-clear="conf">×</button></span>`);
-  if (sc) parts.push(`<span class="chip">${t("chip_scope")} ${esc(sc)} <button type="button" data-clear="scopeFilter">×</button></span>`);
+  if (isUnifiedMode()) {
+    scopes.forEach(sc => {
+      parts.push(`<span class="chip">${t("chip_scope")} ${esc(sc)} <button type="button" data-clear-scope="${esc(sc)}" aria-label="${t("clear")}">×</button></span>`);
+    });
+    if (unifiedNodeType !== "all") {
+      const nodeLabel = unifiedNodeType === "rules" ? t("nodes_rules") : t("nodes_docs");
+      parts.push(`<span class="chip">${t("chip_nodes")} ${esc(nodeLabel)} <button type="button" data-clear="nodeType">×</button></span>`);
+    }
+  } else if (scopes.length) {
+    parts.push(`<span class="chip">${t("chip_scope")} ${esc(scopes[0])} <button type="button" data-clear="scopeFilter">×</button></span>`);
+  }
   const off = [];
-  if (!document.getElementById("eRelated").checked) off.push(t("related"));
-  if (!document.getElementById("eSuper").checked) off.push(t("super"));
-  if (!document.getElementById("eConflict").checked) off.push(t("conflict"));
+  if (!isUnifiedMode()) {
+    if (!document.getElementById("eRelated").checked) off.push(t("related"));
+    if (!document.getElementById("eSuper").checked) off.push(t("super"));
+    if (!document.getElementById("eConflict").checked) off.push(t("conflict"));
+  }
   if (off.length) parts.push(`<span class="chip">${t("chip_hiding")} ${off.join(", ")}</span>`);
   const text = document.getElementById("recipeText");
+  const focusMode = isUnifiedMode() && (scopes.length || unifiedNodeType !== "all");
   if (!parts.length) {
-    text.innerHTML = viewMode === "graph" ? t("recipe_home_map") : t("recipe_home_list");
+    if (isUnifiedMode()) text.innerHTML = t("unified_lead");
+    else text.innerHTML = viewMode === "graph" ? t("recipe_home_map") : t("recipe_home_list");
   } else {
-    text.innerHTML = `<strong>${t("recipe_match")}</strong> ` + parts.join(" ");
+    const lead = focusMode ? t("recipe_focus") : t("recipe_match");
+    text.innerHTML = `<strong>${lead}</strong> ` + parts.join(" ");
   }
   text.querySelectorAll("[data-clear]").forEach(btn => {
     btn.onclick = () => {
       const id = btn.getAttribute("data-clear");
+      if (id === "nodeType") {
+        unifiedNodeType = "all";
+        const allRadio = document.querySelector('input[name="unifiedNodeType"][value="all"]');
+        if (allRadio) allRadio.checked = true;
+        commit("push");
+        return;
+      }
       const el = document.getElementById(id);
       if (el) el.value = id === "conf" ? "0" : "";
+      commit("push");
+    };
+  });
+  text.querySelectorAll("[data-clear-scope]").forEach(btn => {
+    btn.onclick = () => {
+      const sc = btn.getAttribute("data-clear-scope");
+      activeScopes = activeScopes.filter(s => s !== sc);
+      if (!isUnifiedMode() && sf) sf.value = activeScopes[0] || "";
       commit("push");
     };
   });
@@ -925,13 +1174,16 @@ function esc(s) {
 function render(opts = {}) {
   const soft = opts.soft === true;
   recipe();
-  const sc = sf.value;
-  document.querySelectorAll(".scope-item").forEach(el => {
-    el.classList.toggle("active", el.dataset.scope === sc);
-  });
+  const scopes = getActiveScopes();
+  if (isUnifiedMode()) renderUnifiedFilterPanel();
+  else {
+    document.querySelectorAll("#scopes .scope-item").forEach(el => {
+      el.classList.toggle("active", scopes.length === 1 && el.dataset.scope === scopes[0]);
+    });
+  }
   const nodes = filtered();
   const c = { active: 0, dormant: 0, superseded: 0 };
-  nodes.forEach(n => { c[n.status] = (c[n.status] || 0) + 1; });
+  nodes.filter(isRuleNode).forEach(n => { c[n.status] = (c[n.status] || 0) + 1; });
   const unfiltered = isHome() && !isUnifiedMode();
   const wantOverview = viewMode === "list" && unfiltered && !isUnifiedMode();
   const switchEl = document.getElementById("viewSwitch");
@@ -944,13 +1196,21 @@ function render(opts = {}) {
   if (wantOverview) {
     if (!soft) showOverview(nodes);
   } else {
-    const next = sc ? localSlice(nodes) : nodes;
+    const useLocalSlice = scopes.length && !isUnifiedMode();
+    const next = useLocalSlice ? localSlice(nodes) : nodes;
     const picked = showGraph(next, { refit: !soft, gentle: soft });
     if (picked.truncated) extra = " · " + t("showing", { a: picked.nodes.length, b: next.length });
-    else if (sc && next.length > nodes.length) extra = " · " + t("nearby", { n: next.length - nodes.length });
+    else if (useLocalSlice && next.length > nodes.length) extra = " · " + t("nearby", { n: next.length - nodes.length });
   }
-  document.getElementById("stats").textContent =
-    t("stats", { n: nodes.length, active: c.active || 0, dormant: c.dormant || 0, superseded: c.superseded || 0 }) + extra;
+  const statsEl = document.getElementById("stats");
+  if (isUnifiedMode()) {
+    const ruleN = nodes.filter(isRuleNode).length;
+    const docN = nodes.length - ruleN;
+    statsEl.textContent = t("unified_stats", { rules: ruleN, docs: docN, n: nodes.length }) + extra;
+  } else {
+    statsEl.textContent =
+      t("stats", { n: nodes.length, active: c.active || 0, dormant: c.dormant || 0, superseded: c.superseded || 0 }) + extra;
+  }
   document.getElementById("labelBtn").textContent = t("labels") + ": " + labelMode;
 }
 
@@ -976,7 +1236,10 @@ function jump(id) {
   }
   selectedId = id;
   viewMode = "graph";
-  if (n.scope && n.scope[0] && sf && !sf.value) sf.value = n.scope[0];
+  if (n.scope && n.scope[0] && !hasScopeFilter()) {
+    if (isUnifiedMode()) activeScopes = [n.scope[0]];
+    else if (sf) sf.value = n.scope[0];
+  }
   savePageState("rules");
   pushQuery();
   show(n);
@@ -1277,13 +1540,14 @@ function startApp() {
   (DATA?.nodes || []).forEach(n => (n.scope || []).forEach(s => { scopeCounts[s] = (scopeCounts[s] || 0) + 1; }));
   scopeList = Object.keys(scopeCounts).sort((a, b) => scopeCounts[b] - scopeCounts[a]);
   scopesEl = document.getElementById("scopes");
+  unifiedScopesEl = document.getElementById("unifiedScopes");
   sf = document.getElementById("scopeFilter");
   scopeList.forEach(s => {
     const row = document.createElement("div");
     row.className = "scope-item";
     row.dataset.scope = s;
     row.innerHTML = `<span class="dot" style="background:${scopeColor(s)}"></span><span>${s}</span><span class="count">${scopeCounts[s]}</span>`;
-    row.onclick = () => openGraph(s);
+    row.onclick = () => pickScope(s);
     scopesEl.appendChild(row);
     const opt = document.createElement("option");
     opt.value = s; opt.textContent = `${s} (${scopeCounts[s]})`; sf.appendChild(opt);
@@ -1327,7 +1591,14 @@ function startApp() {
     document.getElementById("q").value = "";
     document.getElementById("status").value = "";
     document.getElementById("conf").value = "0";
-    if (sf) sf.value = "";
+    clearAllScopes();
+    unifiedNodeType = "all";
+    scopeSearchQuery = "";
+    scopesExpanded = false;
+    const scopeSearch = document.getElementById("scopeSearch");
+    if (scopeSearch) scopeSearch.value = "";
+    const allRadio = document.querySelector('input[name="unifiedNodeType"][value="all"]');
+    if (allRadio) allRadio.checked = true;
     if (appMode === "rules") {
       document.getElementById("eRelated").checked = true;
       document.getElementById("eSuper").checked = true;
@@ -1365,6 +1636,25 @@ function startApp() {
   ["status", "conf", "scopeFilter", "eRelated", "eSuper", "eConflict", "eSources", "eCitedBy"].forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener("change", () => commit("push"));
+  });
+  document.querySelectorAll('input[name="unifiedNodeType"]').forEach(el => {
+    el.addEventListener("change", () => {
+      if (el.checked) {
+        unifiedNodeType = el.value;
+        commit("push");
+      }
+    });
+  });
+  const scopeSearch = document.getElementById("scopeSearch");
+  if (scopeSearch) {
+    scopeSearch.addEventListener("input", () => {
+      scopeSearchQuery = scopeSearch.value;
+      renderUnifiedFilterPanel();
+    });
+  }
+  document.getElementById("scopeExpandBtn")?.addEventListener("click", () => {
+    scopesExpanded = !scopesExpanded;
+    renderUnifiedFilterPanel();
   });
   window.addEventListener("popstate", e => {
     appMode = modeFromPath(location.pathname);
@@ -1547,6 +1837,8 @@ function applyModeChrome(mode, early) {
   const unified = effective === "unified";
   document.body.classList.toggle("docs-mode", effective === "docs");
   document.body.classList.toggle("unified-mode", unified);
+  document.getElementById("rulesScopesPanel")?.classList.toggle("hidden", !rules);
+  document.getElementById("unifiedFilterPanel")?.classList.toggle("hidden", !unified);
   document.getElementById("recipe").classList.toggle("hidden", effective === "docs");
   document.getElementById("rulesMain").classList.toggle("hidden", effective === "docs");
   document.getElementById("rulesMain").setAttribute("aria-hidden", effective === "docs" ? "true" : "false");
