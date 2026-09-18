@@ -213,6 +213,7 @@ let lastPushed = null;
 let edgeIndex = {};
 let scopeCounts = {};
 let scopeList = [];
+let detailFingerprint = "";
 let activeScopes = [];
 let unifiedNodeType = "all";
 let scopeSearchQuery = "";
@@ -512,44 +513,251 @@ function clearAllScopes() {
   activeScopes = [];
   if (sf) sf.value = "";
 }
-function renderUnifiedFilterPanel() {
-  if (!unifiedScopesEl) return;
+function recomputeScopeIndex() {
+  Object.keys(edgeIndex).forEach(k => delete edgeIndex[k]);
+  Object.keys(scopeCounts).forEach(k => delete scopeCounts[k]);
+  const data = activeData();
+  (data.edges || []).forEach(e => {
+    edgeIndex[e.source] = (edgeIndex[e.source] || 0) + 1;
+    edgeIndex[e.target] = (edgeIndex[e.target] || 0) + 1;
+  });
+  data.nodes.filter(isRuleNode).forEach(n => {
+    (n.scope || []).forEach(s => {
+      scopeCounts[s] = (scopeCounts[s] || 0) + 1;
+    });
+  });
+  scopeList = Object.keys(scopeCounts).sort((a, b) => scopeCounts[b] - scopeCounts[a]);
+}
+function cssEscape(s) {
+  if (typeof CSS !== "undefined" && CSS.escape) return CSS.escape(String(s));
+  return String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+function scopeRowEl(container, s) {
+  return container.querySelector(`.scope-item[data-scope="${cssEscape(s)}"]`);
+}
+function refreshScopeFilterOptions({ soft } = {}) {
+  if (!sf) return;
+  const cur = sf.value;
+  const opts = new Map();
+  [...sf.options].forEach(o => {
+    if (o.value) opts.set(o.value, o);
+  });
+  [...sf.options].forEach(o => {
+    if (o.value && !scopeCounts[o.value]) o.remove();
+  });
+  scopeList.forEach(s => {
+    const label = `${s} (${scopeCounts[s]})`;
+    if (opts.has(s)) {
+      const opt = opts.get(s);
+      if (opt.textContent !== label) opt.textContent = label;
+    } else {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = label;
+      sf.appendChild(opt);
+    }
+  });
+  if (!soft) {
+    const blank = sf.querySelector('option[value=""]');
+    scopeList.forEach(s => {
+      const opt = opts.get(s) || sf.querySelector(`option[value="${cssEscape(s)}"]`);
+      if (opt) sf.appendChild(opt);
+    });
+    if (blank) sf.insertBefore(blank, sf.firstChild);
+  }
+  if (cur && scopeCounts[cur]) sf.value = cur;
+  else if (cur && !scopeCounts[cur]) sf.value = "";
+}
+function mountScopeRows(container, shown, { createRow, patchRow, soft } = {}) {
+  if (!shown.length) {
+    if (!container.querySelector(".empty")) {
+      container.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
+    }
+    return;
+  }
+  const empty = container.querySelector(".empty");
+  if (empty) empty.remove();
+  const shownSet = new Set(shown);
+  if (soft) {
+    container.querySelectorAll(".scope-item").forEach(el => {
+      const s = el.dataset.scope;
+      if (!shownSet.has(s)) el.remove();
+      else patchRow(el, s);
+    });
+    for (const s of shown) {
+      if (!scopeRowEl(container, s)) container.appendChild(createRow(s));
+    }
+    return;
+  }
+  container.querySelectorAll(".scope-item").forEach(el => {
+    if (!shownSet.has(el.dataset.scope)) el.remove();
+  });
+  let prev = null;
+  for (const s of shown) {
+    let row = scopeRowEl(container, s);
+    if (!row) {
+      row = createRow(s);
+      if (prev) prev.insertAdjacentElement("afterend", row);
+      else container.insertBefore(row, container.firstChild);
+    } else {
+      patchRow(row, s);
+      if (prev) {
+        if (prev.nextElementSibling !== row) prev.insertAdjacentElement("afterend", row);
+      } else if (container.firstElementChild !== row) {
+        container.insertBefore(row, container.firstChild);
+      }
+    }
+    prev = row;
+  }
+}
+function refreshRulesScopeSidebar({ soft } = {}) {
+  if (!scopesEl) return;
+  const scopes = getActiveScopes();
+  const activeScope = scopes.length === 1 ? scopes[0] : "";
+  if (!scopeList.length) {
+    if (!scopesEl.querySelector(".empty")) {
+      scopesEl.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
+    }
+    return;
+  }
+  mountScopeRows(scopesEl, scopeList, {
+    soft,
+    createRow(s) {
+      const row = document.createElement("div");
+      row.className = "scope-item" + (s === activeScope ? " active" : "");
+      row.dataset.scope = s;
+      row.innerHTML =
+        `<span class="dot" style="background:${scopeColor(s)}"></span><span>${esc(s)}</span><span class="count">${scopeCounts[s]}</span>`;
+      row.onclick = () => pickScope(s);
+      return row;
+    },
+    patchRow(row, s) {
+      const countEl = row.querySelector(".count");
+      const count = String(scopeCounts[s]);
+      if (countEl && countEl.textContent !== count) countEl.textContent = count;
+      row.classList.toggle("active", s === activeScope);
+    },
+    soft,
+  });
+  refreshScopeFilterOptions({ soft });
+}
+function unifiedScopeFilteredList() {
   const q = scopeSearchQuery.trim().toLowerCase();
   let list = scopeList;
   if (q) list = list.filter(s => s.toLowerCase().includes(q));
-  const needExpand = !scopesExpanded && list.length > UNIFIED_SCOPES_COLLAPSED;
-  const shown = needExpand ? list.slice(0, UNIFIED_SCOPES_COLLAPSED) : list;
-  const expandBtn = document.getElementById("scopeExpandBtn");
-  if (expandBtn) {
-    expandBtn.classList.toggle("hidden", list.length <= UNIFIED_SCOPES_COLLAPSED);
-    expandBtn.textContent = scopesExpanded ? t("scope_collapse") : t("scope_expand");
+  return list;
+}
+function unifiedScopeShownList(list) {
+  const full = list || unifiedScopeFilteredList();
+  if (!scopesExpanded && full.length > UNIFIED_SCOPES_COLLAPSED) {
+    return full.slice(0, UNIFIED_SCOPES_COLLAPSED);
   }
-  if (!shown.length) {
-    unifiedScopesEl.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
+  return full;
+}
+function syncUnifiedScopeExpandBtn(list) {
+  const expandBtn = document.getElementById("scopeExpandBtn");
+  if (!expandBtn) return;
+  expandBtn.classList.toggle("hidden", list.length <= UNIFIED_SCOPES_COLLAPSED);
+  expandBtn.textContent = scopesExpanded ? t("scope_collapse") : t("scope_expand");
+}
+function patchScopeCountEl(countEl, match, total) {
+  const sig = `${match}/${total}`;
+  if (countEl.dataset.sig === sig) return;
+  countEl.dataset.sig = sig;
+  countEl.innerHTML = t("scope_count", { match, total });
+}
+function bindUnifiedScopeRow(row, s) {
+  const activate = ev => pickScope(s, ev.metaKey || ev.ctrlKey);
+  row.onclick = activate;
+  row.onkeydown = ev => {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      activate(ev);
+    }
+  };
+}
+function refreshUnifiedScopeSidebar({ soft } = {}) {
+  if (!unifiedScopesEl) return;
+  const list = unifiedScopeFilteredList();
+  syncUnifiedScopeExpandBtn(list);
+  const shown = unifiedScopeShownList(list);
+  mountScopeRows(unifiedScopesEl, shown, {
+    soft,
+    createRow(s) {
+      const match = scopeFacetCount(s);
+      const total = scopeCounts[s] || 0;
+      const active = activeScopes.includes(s);
+      const dim = match === 0 && !active;
+      const row = document.createElement("div");
+      row.className = "scope-item" + (active ? " active" : "") + (dim ? " dim" : "");
+      row.dataset.scope = s;
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
+      row.innerHTML =
+        `<span class="dot" style="background:${scopeColor(s)}"></span>` +
+        `<span>${esc(s)}</span>` +
+        `<span class="count">${t("scope_count", { match, total })}</span>`;
+      bindUnifiedScopeRow(row, s);
+      return row;
+    },
+    patchRow(row, s) {
+      const match = scopeFacetCount(s);
+      const total = scopeCounts[s] || 0;
+      const active = activeScopes.includes(s);
+      const dim = match === 0 && !active;
+      row.classList.toggle("active", active);
+      row.classList.toggle("dim", dim);
+      const countEl = row.querySelector(".count");
+      if (countEl) patchScopeCountEl(countEl, match, total);
+    },
+    soft,
+  });
+}
+function refreshScopeSidebars({ soft } = {}) {
+  if (isUnifiedMode()) refreshUnifiedScopeSidebar({ soft });
+  else refreshRulesScopeSidebar({ soft });
+}
+function detailNodeFingerprint(n) {
+  if (!n) return "";
+  if (n._kind && n._kind !== "rule") {
+    return JSON.stringify({ id: n.id, claim: n.claim, heading: n.heading, path: n.path, kind: n._kind });
+  }
+  return JSON.stringify({
+    id: n.id,
+    claim: n.claim,
+    status: n.status,
+    confidence: n.confidence,
+    scope: n.scope,
+    reinforcement_count: n.reinforcement_count,
+    supersedes: n.supersedes,
+    related: n.related,
+    referenced_by: n.referenced_by,
+    evidence_len: (n.evidence_log || []).length,
+  });
+}
+function refreshDetailPanel({ soft } = {}) {
+  if (!selectedId) return;
+  const n = nodeById(selectedId);
+  const detail = document.getElementById("detail");
+  if (!n) {
+    if (soft) {
+      selectedId = null;
+      detailFingerprint = "";
+      detail.innerHTML = '<p class="empty">' + t("detail_empty") + "</p>";
+    }
     return;
   }
-  unifiedScopesEl.innerHTML = shown.map(s => {
-    const match = scopeFacetCount(s);
-    const total = scopeCounts[s] || 0;
-    const active = activeScopes.includes(s);
-    const dim = match === 0 && !active;
-    const countHtml = t("scope_count", { match, total });
-    return `<div class="scope-item${active ? " active" : ""}${dim ? " dim" : ""}" data-scope="${esc(s)}" role="button" tabindex="0">` +
-      `<span class="dot" style="background:${scopeColor(s)}"></span>` +
-      `<span>${esc(s)}</span>` +
-      `<span class="count">${countHtml}</span></div>`;
-  }).join("");
-  unifiedScopesEl.querySelectorAll(".scope-item").forEach(row => {
-    const s = row.dataset.scope;
-    const activate = ev => pickScope(s, ev.metaKey || ev.ctrlKey);
-    row.onclick = activate;
-    row.onkeydown = ev => {
-      if (ev.key === "Enter" || ev.key === " ") {
-        ev.preventDefault();
-        activate(ev);
-      }
-    };
-  });
+  const fp = detailNodeFingerprint(n);
+  if (!soft || fp !== detailFingerprint) {
+    if (n._kind && n._kind !== "rule") showDocNode(n);
+    else show(n);
+    detailFingerprint = fp;
+  } else if (isRuleNode(n)) {
+    fetchRuleSources(n.id, { soft: true });
+  }
+}
+function renderUnifiedFilterPanel() {
+  refreshUnifiedScopeSidebar();
 }
 
 function t(key, vars) {
@@ -682,7 +890,7 @@ function applyLang() {
   if (empty) empty.innerHTML = t("detail_empty");
   if (!scopeList.length && scopesEl) scopesEl.innerHTML = '<p class="empty">' + t("no_scopes") + "</p>";
   if (appMode === "docs") refreshDocsChrome();
-  else if (appMode === "unified" && appStarted) renderUnifiedFilterPanel();
+  else if (appStarted) refreshScopeSidebars();
 }
 function commit(mode) {
   savePageState(appMode);
@@ -792,25 +1000,63 @@ function edgeOn(kind) {
   }
   return true;
 }
-function paintLegend(names) {
+function bindLegendDot(btn, s, focus, readOnly) {
+  const total = scopeCounts[s] || 0;
+  const match = isUnifiedMode() ? scopeFacetCount(s) : total;
+  const countLabel = isUnifiedMode() && match !== total ? `${match}/${total}` : String(total);
+  btn.onmouseenter = () => { focus.innerHTML = `${esc(s)} <span class="n"> · ${countLabel}</span>`; };
+  btn.onmouseleave = () => { focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>'; };
+  if (!readOnly) btn.onclick = () => pickScope(s, false);
+}
+function paintLegend(names, opts = {}) {
+  const soft = opts.soft === true;
   const keys = (names && names.length) ? names : scopeList;
   const box = document.getElementById("legendScopes");
   const focus = document.getElementById("legendFocus");
+  if (!box || !focus) return;
   const selected = new Set(getActiveScopes());
   const readOnly = isUnifiedMode();
   const tag = readOnly ? "span" : "button";
+  if (soft) {
+    const keysSet = new Set(keys);
+    box.querySelectorAll(".palette-dot").forEach(el => {
+      const s = el.getAttribute("data-scope");
+      if (!keysSet.has(s)) el.remove();
+    });
+    let prev = null;
+    for (const s of keys) {
+      let dot = box.querySelector(`.palette-dot[data-scope="${cssEscape(s)}"]`);
+      if (!dot) {
+        dot = document.createElement(tag);
+        dot.className = "palette-dot" + (selected.has(s) ? " on" : "");
+        dot.setAttribute("data-scope", s);
+        dot.style.background = scopeColor(s);
+        dot.title = s;
+        dot.setAttribute("aria-label", s);
+        dot.setAttribute("role", "listitem");
+        if (!readOnly) dot.type = "button";
+        bindLegendDot(dot, s, focus, readOnly);
+        if (prev) prev.insertAdjacentElement("afterend", dot);
+        else box.insertBefore(dot, box.firstChild);
+      } else {
+        dot.classList.toggle("on", selected.has(s));
+        dot.style.background = scopeColor(s);
+        if (prev) {
+          if (prev.nextElementSibling !== dot) prev.insertAdjacentElement("afterend", dot);
+        } else if (box.firstElementChild !== dot) {
+          box.insertBefore(dot, box.firstChild);
+        }
+      }
+      prev = dot;
+    }
+    return;
+  }
   box.innerHTML = keys.map(s =>
     `<${tag} ${readOnly ? "" : 'type="button"'} class="palette-dot${selected.has(s) ? " on" : ""}" data-scope="${esc(s)}" style="background:${scopeColor(s)}" title="${esc(s)}" aria-label="${esc(s)}" role="listitem"></${tag}>`
   ).join("");
   focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>';
   box.querySelectorAll(".palette-dot").forEach(btn => {
-    const s = btn.getAttribute("data-scope");
-    const total = scopeCounts[s] || 0;
-    const match = isUnifiedMode() ? scopeFacetCount(s) : total;
-    const countLabel = isUnifiedMode() && match !== total ? `${match}/${total}` : String(total);
-    btn.onmouseenter = () => { focus.innerHTML = `${esc(s)} <span class="n"> · ${countLabel}</span>`; };
-    btn.onmouseleave = () => { focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>'; };
-    if (!readOnly) btn.onclick = () => pickScope(s, false);
+    bindLegendDot(btn, btn.getAttribute("data-scope"), focus, readOnly);
   });
 }
 function setHelp(open) {
@@ -950,31 +1196,17 @@ function listEdges(kind, empty) {
     `<div class="chain" data-id="${e.source}">${e.source} → ${e.target}<div class="empty">${claimOf(e.source)}</div></div>`
   ).join("") + extra;
 }
-function showOverview(nodes) {
-  host.classList.add("hidden");
-  document.getElementById("hud").classList.add("hidden");
-  const ov = document.getElementById("overview");
-  ov.classList.remove("hidden");
+function overviewStatusCounts(nodes) {
   const c = { active: 0, dormant: 0, superseded: 0 };
   nodes.forEach(n => { c[n.status] = (c[n.status] || 0) + 1; });
+  return c;
+}
+function overviewEdgeKinds() {
   const kinds = { supersedes: 0, related: 0, conflicts_with: 0 };
-  (activeData().edges || []).forEach(e => { kinds[e.kind] = (kinds[e.kind] || 0) + 1; });
-  const max = Math.max(1, ...scopeList.map(s => scopeCounts[s]));
-  const bars = scopeList.slice(0, 24).map(s => {
-    const pct = Math.max(2, Math.round(100 * scopeCounts[s] / max));
-    return `<div class="bar-row" data-scope="${s}"><span>${s}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${scopeColor(s)}"></div></div><span class="count">${scopeCounts[s]}</span></div>`;
-  }).join("");
-  ov.innerHTML = `
-    <h1 class="ov-title">${t("ov_rules", { n: DATA.nodes.length })}</h1>
-    <p class="ov-lead">${t("ov_lead")}</p>
-    <p class="ov-actions"><button type="button" id="ovGraph">${t("ov_graph")}</button></p>
-    <p>${t("ov_counts", { active: c.active || 0, dormant: c.dormant || 0, superseded: c.superseded || 0, related: kinds.related || 0, super: kinds.supersedes || 0, conflict: kinds.conflicts_with || 0 })}</p>
-    <h2>${t("ov_mass")}</h2>
-    <div class="bars">${bars}</div>
-    <div class="chains"><h2>${t("ov_related")}</h2>${listEdges("related", t("ov_none_related"))}</div>
-    <div class="chains"><h2>${t("ov_super")}</h2>${listEdges("supersedes", t("ov_none_super"))}</div>
-    <div class="chains"><h2>${t("ov_conflict")}</h2>${listEdges("conflicts_with", t("ov_none_conflict"))}</div>
-  `;
+  (DATA.edges || []).forEach(e => { kinds[e.kind] = (kinds[e.kind] || 0) + 1; });
+  return kinds;
+}
+function bindOverviewChrome(ov) {
   ov.querySelectorAll(".bar-row").forEach(row => {
     row.onclick = () => openGraph(row.dataset.scope);
   });
@@ -983,6 +1215,85 @@ function showOverview(nodes) {
   ov.querySelectorAll(".chain").forEach(row => {
     row.onclick = () => jump(row.dataset.id);
   });
+}
+function refreshOverview(nodes, { soft } = {}) {
+  const ov = document.getElementById("overview");
+  if (!ov || ov.classList.contains("hidden")) return;
+  if (!soft || !ov.querySelector(".ov-title")) {
+    showOverview(nodes);
+    return;
+  }
+  const c = overviewStatusCounts(nodes);
+  const kinds = overviewEdgeKinds();
+  const title = ov.querySelector(".ov-title");
+  if (title) title.textContent = t("ov_rules", { n: DATA.nodes.length });
+  const counts = ov.querySelector(".ov-counts");
+  if (counts) {
+    counts.textContent = t("ov_counts", {
+      active: c.active || 0,
+      dormant: c.dormant || 0,
+      superseded: c.superseded || 0,
+      related: kinds.related || 0,
+      super: kinds.supersedes || 0,
+      conflict: kinds.conflicts_with || 0,
+    });
+  }
+  const barsEl = ov.querySelector(".bars");
+  if (!barsEl) return;
+  const max = Math.max(1, ...scopeList.map(s => scopeCounts[s]));
+  const shown = scopeList.slice(0, 24);
+  const shownSet = new Set(shown);
+  barsEl.querySelectorAll(".bar-row").forEach(row => {
+    const s = row.dataset.scope;
+    if (!shownSet.has(s)) row.remove();
+    else {
+      const pct = Math.max(2, Math.round(100 * scopeCounts[s] / max));
+      const fill = row.querySelector(".bar-fill");
+      const countEl = row.querySelector(".count");
+      if (fill) {
+        fill.style.width = pct + "%";
+        fill.style.background = scopeColor(s);
+      }
+      if (countEl) countEl.textContent = scopeCounts[s];
+    }
+  });
+  for (const s of shown) {
+    if (!barsEl.querySelector(`.bar-row[data-scope="${cssEscape(s)}"]`)) {
+      const pct = Math.max(2, Math.round(100 * scopeCounts[s] / max));
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      row.dataset.scope = s;
+      row.innerHTML =
+        `<span>${esc(s)}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${scopeColor(s)}"></div></div><span class="count">${scopeCounts[s]}</span>`;
+      row.onclick = () => openGraph(s);
+      barsEl.appendChild(row);
+    }
+  }
+}
+function showOverview(nodes) {
+  host.classList.add("hidden");
+  document.getElementById("hud").classList.add("hidden");
+  const ov = document.getElementById("overview");
+  ov.classList.remove("hidden");
+  const c = overviewStatusCounts(nodes);
+  const kinds = overviewEdgeKinds();
+  const max = Math.max(1, ...scopeList.map(s => scopeCounts[s]));
+  const bars = scopeList.slice(0, 24).map(s => {
+    const pct = Math.max(2, Math.round(100 * scopeCounts[s] / max));
+    return `<div class="bar-row" data-scope="${esc(s)}"><span>${esc(s)}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${scopeColor(s)}"></div></div><span class="count">${scopeCounts[s]}</span></div>`;
+  }).join("");
+  ov.innerHTML = `
+    <h1 class="ov-title">${t("ov_rules", { n: DATA.nodes.length })}</h1>
+    <p class="ov-lead">${t("ov_lead")}</p>
+    <p class="ov-actions"><button type="button" id="ovGraph">${t("ov_graph")}</button></p>
+    <p class="ov-counts">${t("ov_counts", { active: c.active || 0, dormant: c.dormant || 0, superseded: c.superseded || 0, related: kinds.related || 0, super: kinds.supersedes || 0, conflict: kinds.conflicts_with || 0 })}</p>
+    <h2>${t("ov_mass")}</h2>
+    <div class="bars">${bars}</div>
+    <div class="chains"><h2>${t("ov_related")}</h2>${listEdges("related", t("ov_none_related"))}</div>
+    <div class="chains"><h2>${t("ov_super")}</h2>${listEdges("supersedes", t("ov_none_super"))}</div>
+    <div class="chains"><h2>${t("ov_conflict")}</h2>${listEdges("conflicts_with", t("ov_none_conflict"))}</div>
+  `;
+  bindOverviewChrome(ov);
 }
 function applyLabelOpacity() {
   const n = graphNodes.length;
@@ -1053,7 +1364,7 @@ function showGraph(allFiltered, opts = {}) {
     legendNames.push(s);
   });
   legendNames.sort((a, b) => (scopeCounts[b] || 0) - (scopeCounts[a] || 0));
-  paintLegend(legendNames);
+  paintLegend(legendNames, { soft: gentle });
   graphLinks = edges.filter(e => byId[e.source] && byId[e.target]).map(e => ({
     source: byId[e.source], target: byId[e.target], kind: e.kind
   }));
@@ -1176,14 +1487,10 @@ function esc(s) {
 }
 function render(opts = {}) {
   const soft = opts.soft === true;
+  recomputeScopeIndex();
   recipe();
+  refreshScopeSidebars({ soft });
   const scopes = getActiveScopes();
-  if (isUnifiedMode()) renderUnifiedFilterPanel();
-  else {
-    document.querySelectorAll("#scopes .scope-item").forEach(el => {
-      el.classList.toggle("active", scopes.length === 1 && el.dataset.scope === scopes[0]);
-    });
-  }
   const nodes = filtered();
   const c = { active: 0, dormant: 0, superseded: 0 };
   nodes.filter(isRuleNode).forEach(n => { c[n.status] = (c[n.status] || 0) + 1; });
@@ -1197,7 +1504,8 @@ function render(opts = {}) {
   document.getElementById("viewMap").setAttribute("aria-pressed", viewMode === "graph" ? "true" : "false");
   let extra = "";
   if (wantOverview) {
-    if (!soft) showOverview(nodes);
+    if (soft) refreshOverview(nodes, { soft: true });
+    else showOverview(nodes);
   } else {
     const useLocalSlice = scopes.length && !isUnifiedMode();
     const next = useLocalSlice ? localSlice(nodes) : nodes;
@@ -1220,6 +1528,7 @@ function render(opts = {}) {
 function applyGraphPoll() {
   stampGraph(hostVaultHint);
   render({ soft: true });
+  refreshDetailPanel({ soft: true });
 }
 function hideTip() { document.getElementById("tip").style.display = "none"; }
 function showTip(n, ev) {
@@ -1283,6 +1592,7 @@ function show(n) {
   document.getElementById("detail").querySelectorAll("[data-scope]").forEach(btn => {
     btn.onclick = () => openGraph(btn.getAttribute("data-scope"));
   });
+  detailFingerprint = detailNodeFingerprint(n);
   fetchRuleSources(n.id);
 }
 
@@ -1302,6 +1612,7 @@ function showDocNode(n) {
   if (kind === "chunk" && n.id) {
     fetchChunkDetail(n.id);
   }
+  detailFingerprint = detailNodeFingerprint(n);
 }
 
 const SOURCE_DRAWER_MS = 440;
@@ -1437,17 +1748,22 @@ async function previewSourceInDrawer(source) {
   }
 }
 
-async function fetchRuleSources(id) {
+async function fetchRuleSources(id, { soft } = {}) {
   const el = document.getElementById("detailSources");
   if (!el) return;
+  if (!soft) el.innerHTML = '<span class="empty">…</span>';
   try {
     const res = await fetch("/api/rules/" + encodeURIComponent(id));
     if (!res.ok) {
       el.textContent = "—";
+      el.dataset.sourcesSig = "";
       return;
     }
     const rec = await res.json();
     const src = rec.resolved_sources || [];
+    const sig = JSON.stringify(src);
+    if (soft && el.dataset.sourcesSig === sig) return;
+    el.dataset.sourcesSig = sig;
     if (!src.length) {
       el.textContent = "—";
       return;
@@ -1531,17 +1847,8 @@ function spotlight(d, ev) {
 function startApp() {
   if (appStarted) return;
   appStarted = true;
-  Object.keys(edgeIndex).forEach(k => delete edgeIndex[k]);
-  Object.keys(scopeCounts).forEach(k => delete scopeCounts[k]);
   stampGraph(hostVaultHint);
-
-  (activeData().edges || []).forEach(e => {
-  edgeIndex[e.source] = (edgeIndex[e.source] || 0) + 1;
-    edgeIndex[e.target] = (edgeIndex[e.target] || 0) + 1;
-  });
-
-  (DATA?.nodes || []).forEach(n => (n.scope || []).forEach(s => { scopeCounts[s] = (scopeCounts[s] || 0) + 1; }));
-  scopeList = Object.keys(scopeCounts).sort((a, b) => scopeCounts[b] - scopeCounts[a]);
+  recomputeScopeIndex();
   scopesEl = document.getElementById("scopes");
   unifiedScopesEl = document.getElementById("unifiedScopes");
   sf = document.getElementById("scopeFilter");
