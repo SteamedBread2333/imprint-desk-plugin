@@ -241,8 +241,12 @@
   .palette-dot.on { box-shadow: 0 0 0 2px var(--gold-2); }
   #legendFocus {
     color: var(--ink); font: 12px var(--sans); line-height: 1.45;
+    min-height: calc(12px * 1.45);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  #legendFocus:empty { display: none; }
+  #legendFocus .legend-focus-ph {
+    opacity: 0; user-select: none; pointer-events: none;
+  }
   #legendFocus .n { color: var(--muted); font-variant-numeric: tabular-nums; }
   #tip {
     position: fixed; z-index: 20; max-width: 360px; padding: 10px 12px;

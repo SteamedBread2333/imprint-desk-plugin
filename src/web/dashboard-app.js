@@ -576,12 +576,12 @@ function paintLegend(names) {
   box.innerHTML = keys.map(s =>
     `<button type="button" class="palette-dot${cur === s ? " on" : ""}" data-scope="${esc(s)}" style="background:${scopeColor(s)}" title="${esc(s)}" aria-label="${esc(s)}" role="listitem"></button>`
   ).join("");
-  focus.textContent = "";
+  focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>';
   box.querySelectorAll(".palette-dot").forEach(btn => {
     const s = btn.getAttribute("data-scope");
     const n = scopeCounts[s] || 0;
     btn.onmouseenter = () => { focus.innerHTML = `${esc(s)} <span class="n"> · ${n}</span>`; };
-    btn.onmouseleave = () => { focus.textContent = ""; };
+    btn.onmouseleave = () => { focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>'; };
     btn.onclick = () => openGraph(s);
   });
 }
