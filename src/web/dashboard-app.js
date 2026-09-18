@@ -478,9 +478,12 @@ function connectedDocIds(ruleIds) {
   }
   return docs;
 }
-function scopeMatchCount(scope) {
+function scopeFacetCount(scope) {
+  const required = activeScopes.includes(scope)
+    ? activeScopes.slice()
+    : activeScopes.concat(scope);
   return activeData().nodes.filter(n =>
-    isRuleNode(n) && rulePassesBaseFilters(n) && (n.scope || []).includes(scope)
+    isRuleNode(n) && rulePassesBaseFilters(n) && ruleMatchesScopes(n, required)
   ).length;
 }
 function pickScope(scope, andMode) {
@@ -526,7 +529,7 @@ function renderUnifiedFilterPanel() {
     return;
   }
   unifiedScopesEl.innerHTML = shown.map(s => {
-    const match = scopeMatchCount(s);
+    const match = scopeFacetCount(s);
     const total = scopeCounts[s] || 0;
     const active = activeScopes.includes(s);
     const dim = match === 0 && !active;
@@ -803,7 +806,7 @@ function paintLegend(names) {
   box.querySelectorAll(".palette-dot").forEach(btn => {
     const s = btn.getAttribute("data-scope");
     const total = scopeCounts[s] || 0;
-    const match = isUnifiedMode() ? scopeMatchCount(s) : total;
+    const match = isUnifiedMode() ? scopeFacetCount(s) : total;
     const countLabel = isUnifiedMode() && match !== total ? `${match}/${total}` : String(total);
     btn.onmouseenter = () => { focus.innerHTML = `${esc(s)} <span class="n"> · ${countLabel}</span>`; };
     btn.onmouseleave = () => { focus.innerHTML = '<span class="legend-focus-ph" aria-hidden="true">&nbsp;</span>'; };
