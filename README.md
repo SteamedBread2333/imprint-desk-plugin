@@ -46,6 +46,8 @@ imprint desk open
 <p align="center">Graph view: radial relation map, scope-colored nodes.</p>
 <img width="1920" height="958" alt="imprint desk graph view" src="https://github.com/user-attachments/assets/6011309f-45b8-46f8-b266-3172332f902c" />
 
+<p align="center">Graph view with document notes.</p>
+<img width="1920" height="958" alt="image" src="https://github.com/user-attachments/assets/f4bfdc35-f715-491c-b125-a3145daef8b6" />
 
 ## Environment
 
