@@ -54,6 +54,7 @@ const I18N = {
     node_size: "(size)", evidence: "Evidence", evidence_empty: "No evidence yet.",
     meta_status: "status", meta_conf: "confidence", meta_scope: "scope", meta_reinf: "reinforced",
     meta_super: "supersedes", meta_related: "related", meta_back: "referenced by",
+    meta_query_local: "query_local", query_local_empty: "—",
     help_title: "How to read this",
     help_lead: "A <strong>force-directed relation graph</strong>: linked rules pull together, unrelated ones drift apart. Colour is <strong>scope</strong>. Lines are only what the vault wrote down.",
     help_filters: "Filters",
@@ -135,6 +136,7 @@ const I18N = {
     node_size: "（点的大小）", evidence: "证据", evidence_empty: "还没有证据。",
     meta_status: "状态", meta_conf: "置信度", meta_scope: "范围", meta_reinf: "强化",
     meta_super: "替代", meta_related: "关联", meta_back: "被引用",
+    meta_query_local: "query_local", query_local_empty: "—",
     help_title: "怎么看",
     help_lead: "<strong>力导向关系图</strong>：有连线的规则会聚拢，无关的会散开。颜色是 <strong>scope</strong>。线只表示 vault 里写过的关系。",
     help_filters: "筛选",
@@ -376,6 +378,7 @@ function graphFromUnified(ug) {
         related: n.related,
         conflicts_with: n.conflicts_with,
         evidence_log: n.evidence_log,
+        query_local: n.query_local,
         referenced_by: n.referenced_by,
         _kind: "rule",
       };
@@ -435,7 +438,7 @@ function rulePassesBaseFilters(n) {
   if (st && n.status !== st) return false;
   if (n.confidence < conf) return false;
   if (q) {
-    const hay = (n.id + " " + n.claim + " " + (n.scope || []).join(" ")).toLowerCase();
+    const hay = (n.id + " " + n.claim + " " + (n.query_local || "") + " " + (n.scope || []).join(" ")).toLowerCase();
     if (!hay.includes(q)) return false;
   }
   return true;
@@ -732,6 +735,7 @@ function detailNodeFingerprint(n) {
     supersedes: n.supersedes,
     related: n.related,
     referenced_by: n.referenced_by,
+    query_local: n.query_local,
     evidence_len: (n.evidence_log || []).length,
   });
 }
@@ -1578,6 +1582,7 @@ function show(n) {
       <dt>${t("meta_conf")}</dt><dd>${(n.confidence || 0).toFixed(2)} <span class="empty">${t("node_size")}</span></dd>
       <dt>${t("meta_scope")}</dt><dd>${(n.scope || []).map(s => `<button type="button" class="pill btn" data-scope="${esc(s)}" style="border-color:${scopeColor(s)}">${esc(s)}</button>`).join("") || "—"}</dd>
       <dt>${t("meta_reinf")}</dt><dd>${n.reinforcement_count || 0}</dd>
+      <dt>${t("meta_query_local")}</dt><dd>${(n.query_local || "").trim() ? esc(n.query_local) : t("query_local_empty")}</dd>
       <dt>${t("meta_super")}</dt><dd>${idLinks(n.supersedes)}</dd>
       <dt>${t("meta_related")}</dt><dd>${idLinks(n.related)}</dd>
       <dt>${t("meta_back")}</dt><dd>${back || "—"}</dd>
