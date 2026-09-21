@@ -1,6 +1,10 @@
-# imprint-desk-plugin
+<p align="center">
+  <img src="assets/logo.png" width="256" alt="imprint desk logo" />
+</p>
 
-Live vault dashboard for [imprint](https://github.com/SteamedBread2333/imprint). Full port of the former static `memory/dashboard.html`: census list, radial relation graph (dandelion layout), filters, URL state, EN/中文, help panel, and rule detail.
+<h1 align="center">imprint-desk-plugin</h1>
+
+<p align="center">Live vault dashboard for <a href="https://github.com/SteamedBread2333/imprint">imprint</a>. Full port of the former static <code>memory/dashboard.html</code>: census list, radial relation graph (dandelion layout), filters, URL state, EN/中文, help panel, and rule detail.</p>
 
 ## Quick start
 
