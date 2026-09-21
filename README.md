@@ -62,5 +62,3 @@ imprint desk open
 Features: IndexedDB graph cache (offline/stale-while-revalidate), 30s polling, docs search tab when shelves is running.
 
 See [OUTLINE.md](./OUTLINE.md) for architecture and phases.
-
-Integration fixture: [memory-test](../memory-test) (3000 rules + 20 docs).
